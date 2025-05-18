@@ -30,19 +30,20 @@ int main()
     Assert(ints[0] == 0);
     Assert(ints[9999] == 0);
 
-    // arena.reset_to(0);
+    arena.reset_to(0);
 
     ints = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
     Assert(ints != nullptr);
     Assert(ints[0] == 0);
     Assert(ints[9999] == 0);
 
-    // arena.reset_to(0);
-
-    ints = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
-    Assert(ints != nullptr);
-    Assert(ints[0] == 0);
-    Assert(ints[9999] == 0);
+    {
+        auto temp_arena = arena.temp_arena_guard();
+        ints            = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
+        Assert(ints != nullptr);
+        Assert(ints[0] == 0);
+        Assert(ints[9999] == 0);
+    }
 
     Allocator* allocator    = &arena;
     auto       another_ints = allocator->alloc<u8>(Megabytes(7));
