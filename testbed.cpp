@@ -44,11 +44,9 @@ int main()
     Assert(ints[0] == 0);
     Assert(ints[9999] == 0);
 
-    Allocator* allocator        = &arena;
-    u64        another_ints_len = 1000000;
-    // i64*      another_ints     = cast(i64*) allocator.alloc(sizeof(i64) * another_ints_len, alignof(i64));
-    auto another_ints = allocator->alloc<i64>(another_ints_len);
-    Assert(another_ints != nullptr);
-    Assert(another_ints[0] == 0);
-    Assert(another_ints[another_ints_len - 1] == 0);
+    Allocator* allocator    = &arena;
+    auto       another_ints = allocator->alloc<u8>(Megabytes(7));
+    Assert(another_ints[9999] == 0);
+    auto another_ints1 = allocator->alloc<u8>(Megabytes(7));
+    Assert(another_ints1[9999] == 0);
 }

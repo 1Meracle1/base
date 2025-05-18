@@ -215,7 +215,7 @@ struct MemoryBlock
             m_committed = new_committed;
         }
         m_used     = new_used;
-        rawptr res = this + aligned_used;
+        rawptr res = cast(u8*) this + aligned_used;
         std::memset(res, 0, size);
         return res;
     }
