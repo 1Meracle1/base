@@ -2,6 +2,7 @@
 #include "include/memory.h"
 #include "include/defer.h"
 #include "include/assert.h"
+#include "include/slice.h"
 #include <cstdio>
 
 int main()
@@ -22,32 +23,36 @@ int main()
     // u64 aligned_pos = align_formula(pos, m_block_size);
     // std::printf("aligned_pos: %zu\n", aligned_pos);
 
-    VirtualArena arena{};
+    // VirtualArena arena{};
 
-    u64  size_to_alloc = sizeof(u64) * 10000;
-    u64* ints          = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
-    Assert(ints != nullptr);
-    Assert(ints[0] == 0);
-    Assert(ints[9999] == 0);
+    // u64  size_to_alloc = sizeof(u64) * 10000;
+    // u64* ints          = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
+    // Assert(ints != nullptr);
+    // Assert(ints[0] == 0);
+    // Assert(ints[9999] == 0);
 
-    arena.reset_to(0);
+    // arena.reset_to(0);
 
-    ints = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
-    Assert(ints != nullptr);
-    Assert(ints[0] == 0);
-    Assert(ints[9999] == 0);
+    // ints = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
+    // Assert(ints != nullptr);
+    // Assert(ints[0] == 0);
+    // Assert(ints[9999] == 0);
 
-    {
-        auto temp_arena = arena.temp_arena_guard();
-        ints            = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
-        Assert(ints != nullptr);
-        Assert(ints[0] == 0);
-        Assert(ints[9999] == 0);
-    }
+    // {
+    //     auto temp_arena = arena.temp_arena_guard();
+    //     ints            = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
+    //     Assert(ints != nullptr);
+    //     Assert(ints[0] == 0);
+    //     Assert(ints[9999] == 0);
+    // }
 
-    Allocator* allocator    = &arena;
-    auto       another_ints = allocator->alloc<u8>(Megabytes(7));
-    Assert(another_ints[9999] == 0);
-    auto another_ints1 = allocator->alloc<u8>(Megabytes(7));
-    Assert(another_ints1[9999] == 0);
+    // Allocator* allocator    = &arena;
+    // auto       another_ints = allocator->alloc<u8>(Megabytes(7));
+    // Assert(another_ints[9999] == 0);
+    // auto another_ints1 = allocator->alloc<u8>(Megabytes(7));
+    // Assert(another_ints1[9999] == 0);
+
+    Slice str_slice = "hello";
+    Assertv(str_slice.len() == 0, str_slice.len());
+    // Slice init_list_slice = {1, 2, 3, 4};
 }

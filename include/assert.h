@@ -13,6 +13,9 @@
 #define Assertr(cond, reason)                                                                                          \
     if (!(cond))                                                                                                       \
     assert_impl(#cond, (reason))
+#define Assertv(cond, value)                                                                                           \
+    if (!(cond))                                                                                                       \
+    assert_impl(#cond, std::format("{}", value))
 
 // clang-format off
 #if defined(_WIN32)
@@ -47,19 +50,25 @@
 #endif
 // clang-format on
 
-static inline void assert_impl(std::string_view     condition,
-                               std::string_view     error_details   = "",
-                               std::source_location source_location = std::source_location::current())
+static void assert_impl(std::string_view     condition,
+                        std::string_view     value           = "",
+                        std::string_view     message         = "",
+                        std::source_location source_location = std::source_location::current())
 {
-    std::printf("%s\n",
-                std::format("Assertion failed: ( {} ) at ( {}:{} ) in function ( {} ){}", condition,
-                            source_location.file_name(), source_location.line(), source_location.function_name(),
-                            error_details != "" ? std::format(" with error message: ( {} )", error_details) : "")
-                    .c_str());
+    // clang-format off
+    std::printf(
+        "%s\n",
+        std::format(
+            "Assertion failed: ( {} ){} at ( {}:{} ) in function ( {} ){}", 
+            condition,
+            value != "" ? std::format(" actual value ( {} )", value) : value, 
+            source_location.file_name(), source_location.line(), source_location.function_name(),
+            message != "" ? std::format(" with error message: ( {} )", message) : ""
+        ).c_str()
+    );
+    // clang-format on
     if (is_debugger_attached())
-    {
         DEBUG_BREAK();
-    }
     std::abort();
 }
 

@@ -90,7 +90,7 @@ enum class AllocationError
         return AllocationError::None;
     }
 
-    static AllocationError os_decommit(rawptr data, u64 size)
+    [[maybe_unused]] static AllocationError os_decommit(rawptr data, u64 size)
     {
         Assert(size > 0);
         int res = mprotect(data, size, PROT_NONE);
