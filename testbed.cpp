@@ -53,6 +53,8 @@ int main()
     // Assert(another_ints1[9999] == 0);
 
     Slice str_slice = "hello";
-    Assertv(str_slice.len() == 0, str_slice.len());
+    for(auto c : str_slice) {
+        printf("%c\n", c);
+    }
     // Slice init_list_slice = {1, 2, 3, 4};
 }
