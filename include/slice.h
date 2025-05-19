@@ -3,13 +3,11 @@
 
 #include "defines.h"
 #include <concepts>
-#include <cstddef>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <type_traits>
-#include "assert.h"
 
 template <typename ValueType> struct Slice
 {
@@ -44,7 +42,6 @@ template <typename ValueType> struct Slice
     }
 
     // implicit constructor for literal arrays like `int arr[] = {1, 2, 3};`,
-    // and for character strings `const char* str = "hello";` - FIXME: should actually be a different constructor?
     template <size_type N>
     constexpr Slice(value_type (&arr)[N]) noexcept
         : m_data(arr)
@@ -53,10 +50,7 @@ template <typename ValueType> struct Slice
     }
 
     // implicit constructor for intializer lists;
-    template <typename Elt, typename = std::enable_if_t<!std::is_array_v<Elt>>> // std::is_same_v<T, const Elt> &&
-    // template <typename Elt>
-    constexpr Slice(std::initializer_list<Elt> init_list) noexcept
-        // requires(!std::is_array_v<Elt>)
+    constexpr Slice(std::initializer_list<value_type> init_list) noexcept
         : m_data(init_list.begin())
         , m_len(init_list.size())
     {
@@ -239,6 +233,16 @@ template <typename ValueType> struct Slice
             }
         }
         return slice_to(i);
+    }
+
+    constexpr ValueType reduce(ValueType initial_value, std::function<ValueType(ValueType acc, const_reference v)>&& f)
+    {
+        auto res = initial_value;
+        for (size_type j = 1; j < len(); j++)
+        {
+            res = f(res, m_data[j]);
+        }
+        return res;
     }
 };
 
