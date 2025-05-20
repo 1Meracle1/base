@@ -59,7 +59,6 @@ int main()
     {
         printf("%c\n", c);
     }
-    Slice<const int> init_list_slice = {1, 2, 3, 4};
 
     Array<int> array{allocator, 10};
 

@@ -2,12 +2,25 @@
 #define SLICE_H
 
 #include "defines.h"
+#include "memory.h"
+#include <algorithm>
+#include <compare>
 #include <concepts>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <type_traits>
+
+template <typename F, typename ValueType>
+concept SliceElementEqualityPredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
+    { f(lhs, rhs) } -> std::same_as<bool>;
+};
+
+template <typename F, typename ValueType>
+concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
+    { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
+};
 
 template <typename ValueType> struct Slice
 {
@@ -25,7 +38,7 @@ template <typename ValueType> struct Slice
     using difference_type = std::ptrdiff_t;
 
     pointer   m_ptr = nullptr;
-    size_type m_len  = 0;
+    size_type m_len = 0;
 
   public:
     constexpr Slice() noexcept
@@ -49,11 +62,12 @@ template <typename ValueType> struct Slice
     }
 
     // implicit constructor for intializer lists;
-    constexpr Slice(std::initializer_list<value_type> init_list) noexcept
-        : m_ptr(init_list.begin())
-        , m_len(init_list.size())
-    {
-    }
+    // commented out as initializer lists aren't literals? - TBC
+    // constexpr Slice(std::initializer_list<value_type> init_list) noexcept
+    //     : m_ptr(init_list.begin())
+    //     , m_len(init_list.size())
+    // {
+    // }
 
     // [start..)
     constexpr Slice slice_from(size_type start) const noexcept { return slice(start, len()); }
@@ -67,7 +81,7 @@ template <typename ValueType> struct Slice
     // [start, end)
     constexpr Slice slice(size_type start, size_type end) const noexcept
     {
-        Assert(start < len() && end <= len());
+        Assert(start <= len() && end <= len());
         size_type   len  = end - start;
         value_type* data = len == 0 ? nullptr : m_ptr + start;
         return Slice(data, len);
@@ -95,10 +109,10 @@ template <typename ValueType> struct Slice
     std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
     std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator<const_iterator>(cbegin()); }
 
-    reference       front() { m_ptr[0]; }
-    const_reference front() const { m_ptr[0]; }
-    reference       back() { m_ptr[len() - 1]; }
-    const_reference back() const { m_ptr[len() - 1]; }
+    reference       front() { return m_ptr[0]; }
+    const_reference front() const { return m_ptr[0]; }
+    reference       back() { return m_ptr[len() - 1]; }
+    const_reference back() const { return m_ptr[len() - 1]; }
 
     constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
 
@@ -130,29 +144,29 @@ template <typename ValueType> struct Slice
     constexpr bool contains_value(const_reference v) const
         requires(std::equality_comparable<value_type>)
     {
-        return linear_search(v);
+        return linear_search(v) != -1;
     }
 
     constexpr bool contains_value(const_reference v, PredicateType&& predicate) const
         requires(std::equality_comparable<value_type>)
     {
-        return linear_search(v, std::forward<PredicateType>(predicate));
+        return linear_search(v, std::forward<PredicateType>(predicate)) != -1;
     }
 
-    constexpr void zero()
+    void zero()
     {
         if (len() > 0)
             std::memset(m_ptr, 0, len());
     }
 
-    constexpr bool bytes_equal(const_reference other) const
+    constexpr bool bytes_equal(const Slice<value_type>& other) const
     {
         if (len() != other.len())
             return false;
-        return std::memcmp(m_ptr, other.m_data, len() * sizeof(value_type)) == 0;
+        return std::memcmp(m_ptr, other.m_ptr, len() * sizeof(value_type)) == 0;
     }
 
-    constexpr bool equal(const_reference other) const
+    constexpr bool equal(const Slice<value_type>& other) const
     {
         if (len() != other.len())
             return false;
@@ -162,7 +176,7 @@ template <typename ValueType> struct Slice
         return true;
     }
 
-    constexpr bool equal(const_reference other, PredicateType&& predicate) const
+    constexpr bool equal(const Slice<value_type>& other, PredicateType&& predicate) const
     {
         if (len() != other.m_len)
             return false;
@@ -172,28 +186,28 @@ template <typename ValueType> struct Slice
         return true;
     }
 
-    constexpr bool has_prefix(const_reference needle) const
+    constexpr bool has_prefix(const Slice<value_type>& needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()));
     }
 
-    constexpr bool has_prefix(const_reference needle, PredicateType&& predicate) const
+    constexpr bool has_prefix(const Slice<value_type>& needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()), std::forward<PredicateType>(predicate));
     }
 
-    constexpr bool has_suffix(const_reference needle) const
+    constexpr bool has_suffix(const Slice<value_type>& needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_from_back(needle.len()));
     }
 
-    constexpr bool has_suffix(const_reference needle, PredicateType&& predicate) const
+    constexpr bool has_suffix(const Slice<value_type>& needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
@@ -217,7 +231,7 @@ template <typename ValueType> struct Slice
         return slice_to(i);
     }
 
-    constexpr Slice unique(PredicateType&& predicate)
+    template <SliceElementEqualityPredicate<value_type> F> constexpr Slice unique(F predicate)
     {
         if (len() < 2)
             return *this;
@@ -234,14 +248,29 @@ template <typename ValueType> struct Slice
         return slice_to(i);
     }
 
-    constexpr ValueType reduce(ValueType initial_value, std::function<ValueType(ValueType acc, const_reference v)>&& f)
+    template <typename F> constexpr ValueType reduce(ValueType initial_value, F&& f) const
     {
         auto res = initial_value;
         for (size_type j = 1; j < len(); j++)
-        {
-            res = f(res, m_ptr[j]);
-        }
+            res += f(res, m_ptr[j]);
         return res;
+    }
+
+    template <SliceElementWeakOrderingComparePredicate<value_type> F> constexpr void sort(F&& f)
+    {
+        std::sort(begin(), end(), std::forward<SliceElementWeakOrderingComparePredicate<F, value_type>>(f));
+    }
+
+    Slice clone(Allocator* allocator)
+    {
+        if (m_len > 0)
+        {
+            auto ptr = allocator->alloc<value_type>(m_len);
+            for (size_type i = 0; i != len(); i++)
+                ptr[i] = m_ptr[i];
+            return Slice(ptr, m_len);
+        }
+        return Slice(nullptr, 0);
     }
 };
 
