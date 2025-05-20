@@ -24,19 +24,18 @@ template <typename ValueType> struct Slice
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-  private:
-    pointer   m_data = nullptr;
+    pointer   m_ptr = nullptr;
     size_type m_len  = 0;
 
   public:
     constexpr Slice() noexcept
-        : m_data(nullptr)
+        : m_ptr(nullptr)
         , m_len(0)
     {
     }
 
-    constexpr Slice(pointer data, size_type len) noexcept
-        : m_data(data)
+    constexpr Slice(pointer ptr, size_type len) noexcept
+        : m_ptr(ptr)
         , m_len(len)
     {
     }
@@ -44,14 +43,14 @@ template <typename ValueType> struct Slice
     // implicit constructor for literal arrays like `int arr[] = {1, 2, 3};`,
     template <size_type N>
     constexpr Slice(value_type (&arr)[N]) noexcept
-        : m_data(arr)
+        : m_ptr(arr)
         , m_len(N)
     {
     }
 
     // implicit constructor for intializer lists;
     constexpr Slice(std::initializer_list<value_type> init_list) noexcept
-        : m_data(init_list.begin())
+        : m_ptr(init_list.begin())
         , m_len(init_list.size())
     {
     }
@@ -70,24 +69,24 @@ template <typename ValueType> struct Slice
     {
         Assert(start < len() && end <= len());
         size_type   len  = end - start;
-        value_type* data = len == 0 ? nullptr : m_data + start;
+        value_type* data = len == 0 ? nullptr : m_ptr + start;
         return Slice(data, len);
     }
 
-    constexpr pointer       data() noexcept { return m_data; }
-    constexpr const_pointer data() const noexcept { return m_data; }
+    constexpr pointer       data() noexcept { return m_ptr; }
+    constexpr const_pointer data() const noexcept { return m_ptr; }
     constexpr size_type     len() const noexcept { return m_len; }
     constexpr bool          empty() const noexcept { return len() == 0; }
 
-    reference       operator[](size_type i) { return m_data[i]; }
-    const_reference operator[](size_type i) const { return m_data[i]; }
+    reference       operator[](size_type i) { return m_ptr[i]; }
+    const_reference operator[](size_type i) const { return m_ptr[i]; }
 
-    iterator       begin() { return m_data; }
-    iterator       end() { return m_data + len(); }
-    const_iterator begin() const { return m_data; }
-    const_iterator end() const { return m_data + len(); }
-    const_iterator cbegin() const { return m_data; }
-    const_iterator cend() const { return m_data + len(); }
+    iterator       begin() { return m_ptr; }
+    iterator       end() { return m_ptr + len(); }
+    const_iterator begin() const { return m_ptr; }
+    const_iterator end() const { return m_ptr + len(); }
+    const_iterator cbegin() const { return m_ptr; }
+    const_iterator cend() const { return m_ptr + len(); }
 
     std::reverse_iterator<iterator>       rbegin() { return std::reverse_iterator<iterator>(end()); }
     std::reverse_iterator<iterator>       rend() { return std::reverse_iterator<iterator>(begin()); }
@@ -96,12 +95,12 @@ template <typename ValueType> struct Slice
     std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
     std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator<const_iterator>(cbegin()); }
 
-    reference       front() { m_data[0]; }
-    const_reference front() const { m_data[0]; }
-    reference       back() { m_data[len() - 1]; }
-    const_reference back() const { m_data[len() - 1]; }
+    reference       front() { m_ptr[0]; }
+    const_reference front() const { m_ptr[0]; }
+    reference       back() { m_ptr[len() - 1]; }
+    const_reference back() const { m_ptr[len() - 1]; }
 
-    constexpr void swap(size_type i, size_type j) { std::swap(m_data[i], m_data[j]); }
+    constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
 
     constexpr void reverse()
     {
@@ -113,7 +112,7 @@ template <typename ValueType> struct Slice
     constexpr i64 linear_search(const_reference v) const
     {
         for (size_type i = 0; i < len(); i++)
-            if (m_data[i] == v)
+            if (m_ptr[i] == v)
                 return i;
         return -1;
     }
@@ -123,7 +122,7 @@ template <typename ValueType> struct Slice
     constexpr i64 linear_search(const_reference v, PredicateType&& predicate) const
     {
         for (size_type i = 0; i < len(); i++)
-            if (predicate(m_data[i], v))
+            if (predicate(m_ptr[i], v))
                 return i;
         return -1;
     }
@@ -143,14 +142,14 @@ template <typename ValueType> struct Slice
     constexpr void zero()
     {
         if (len() > 0)
-            std::memset(m_data, 0, len());
+            std::memset(m_ptr, 0, len());
     }
 
     constexpr bool bytes_equal(const_reference other) const
     {
         if (len() != other.len())
             return false;
-        return std::memcmp(m_data, other.m_data, len() * sizeof(value_type)) == 0;
+        return std::memcmp(m_ptr, other.m_data, len() * sizeof(value_type)) == 0;
     }
 
     constexpr bool equal(const_reference other) const
@@ -158,7 +157,7 @@ template <typename ValueType> struct Slice
         if (len() != other.len())
             return false;
         for (size_type i = 0; i < len(); i++)
-            if (m_data[i] != other[i])
+            if (m_ptr[i] != other[i])
                 return false;
         return true;
     }
@@ -168,7 +167,7 @@ template <typename ValueType> struct Slice
         if (len() != other.m_len)
             return false;
         for (size_type i = 0; i < len(); i++)
-            if (!predicate(m_data[i], other[i]))
+            if (!predicate(m_ptr[i], other[i]))
                 return false;
         return true;
     }
@@ -208,10 +207,10 @@ template <typename ValueType> struct Slice
         size_type i = 1;
         for (size_type j = 1; j < len(); j++)
         {
-            if (m_data[j] != m_data[j - 1])
+            if (m_ptr[j] != m_ptr[j - 1])
             {
                 if (i != j)
-                    m_data[i] = m_data[j];
+                    m_ptr[i] = m_ptr[j];
                 i += 1;
             }
         }
@@ -225,10 +224,10 @@ template <typename ValueType> struct Slice
         size_type i = 1;
         for (size_type j = 1; j < len(); j++)
         {
-            if (!predicate(m_data[j], m_data[j - 1]))
+            if (!predicate(m_ptr[j], m_ptr[j - 1]))
             {
                 if (i != j)
-                    m_data[i] = m_data[j];
+                    m_ptr[i] = m_ptr[j];
                 i += 1;
             }
         }
@@ -240,7 +239,7 @@ template <typename ValueType> struct Slice
         auto res = initial_value;
         for (size_type j = 1; j < len(); j++)
         {
-            res = f(res, m_data[j]);
+            res = f(res, m_ptr[j]);
         }
         return res;
     }

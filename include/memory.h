@@ -14,17 +14,38 @@ struct Allocator
 {
     virtual ~Allocator() {}
 
-    template <typename T> T*   alloc(u64 count = 1) { return cast(T*) alloc(sizeof(T) * count, alignof(T)); }
-    template <typename T> void free(T* ptr, u64 count = 1) { free(ptr, sizeof(T) * count); }
+    template <typename T> T* alloc(u64 length = 1) { return cast(T*) alloc_raw(sizeof(T) * length, alignof(T)); }
+    template <typename T> T* realloc(T* ptr, u64 old_length, u64 new_length)
+    {
+        return cast(T*) realloc_raw(ptr, sizeof(T) * old_length, sizeof(T) * new_length, alignof(T));
+    }
+    template <typename T> void free(T* ptr, u64 length = 1) { free_raw(ptr, sizeof(T) * length); }
 
-    virtual rawptr alloc(u64 size, u64 alignment) = 0;
-    virtual void   free(rawptr ptr, u64 size)     = 0;
+    virtual rawptr alloc_raw(u64 size, u64 alignment)                                 = 0;
+    virtual rawptr realloc_raw(rawptr ptr, u64 old_size, u64 new_size, u64 alignment) = 0;
+    virtual void   free_raw(rawptr ptr, u64 size)                                     = 0;
 };
 
 struct HeapAllocator : Allocator
 {
-    rawptr alloc(u64 size, u64 alignment) override { return std::aligned_alloc(alignment, size); }
-    void   free(rawptr ptr, u64 size) override
+    rawptr alloc_raw(u64 size, u64 alignment) override
+    {
+        Assert(size > 0 && alignment > 0);
+        rawptr new_ptr = std::aligned_alloc(alignment, size);
+        Assert(new_ptr != nullptr);
+        std::memset(new_ptr, 0, size);
+        return new_ptr;
+    }
+    rawptr realloc_raw(rawptr ptr, u64 old_size, u64 new_size, u64 alignment) override
+    {
+        Assert(ptr != nullptr && old_size > 0 && new_size > 0 && alignment > 0);
+        rawptr new_ptr       = alloc_raw(new_size, alignment);
+        u64    bytes_to_copy = std::min(old_size, new_size);
+        std::memcpy(new_ptr, ptr, bytes_to_copy);
+        free_raw(ptr, old_size);
+        return new_ptr;
+    }
+    void free_raw(rawptr ptr, u64 size) override
     {
         (void)size;
         return std::free(ptr);
@@ -354,7 +375,7 @@ struct VirtualArena : Allocator
         }
     }
 
-    rawptr allocate(u64 size) { return alloc(size, m_alignment); }
+    rawptr allocate(u64 size) { return alloc_raw(size, m_alignment); }
 
     rawptr allocate(u64 size, u64 alignment)
     {
@@ -403,8 +424,17 @@ struct VirtualArena : Allocator
         }
     }
 
-    rawptr alloc(u64 size, u64 alignment) override { return allocate(size, alignment); }
-    void   free(rawptr ptr, u64 size) override
+    rawptr alloc_raw(u64 size, u64 alignment) override { return allocate(size, alignment); }
+    rawptr realloc_raw(rawptr ptr, u64 old_size, u64 new_size, u64 alignment) override
+    {
+        Assert(ptr != nullptr && old_size > 0 && new_size > 0 && alignment > 0);
+        rawptr new_ptr       = allocate(new_size, alignment);
+        u64    bytes_to_copy = std::min(old_size, new_size);
+        std::memcpy(new_ptr, ptr, bytes_to_copy);
+        free_raw(ptr, old_size);
+        return new_ptr;
+    }
+    void free_raw(rawptr ptr, u64 size) override
     {
         (void)ptr;
         (void)size;

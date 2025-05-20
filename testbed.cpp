@@ -1,3 +1,4 @@
+#include "include/array.h"
 #include "include/defines.h"
 #include "include/memory.h"
 #include "include/defer.h"
@@ -23,7 +24,8 @@ int main()
     // u64 aligned_pos = align_formula(pos, m_block_size);
     // std::printf("aligned_pos: %zu\n", aligned_pos);
 
-    // VirtualArena arena{};
+    VirtualArena arena{};
+    Allocator*   allocator = &arena;
 
     // u64  size_to_alloc = sizeof(u64) * 10000;
     // u64* ints          = cast(u64*) arena.alloc(size_to_alloc, alignof(i64));
@@ -58,4 +60,13 @@ int main()
         printf("%c\n", c);
     }
     Slice<const int> init_list_slice = {1, 2, 3, 4};
+
+    Array<int> array{allocator, 10};
+
+    for(std::size_t i = 0; i < 1000000;)
+    {   
+        auto new_i = GrowthFormulaDefault{}(i);
+        printf("%zu - %zu\n", i, new_i);
+        i = new_i;
+    }
 }
