@@ -1,7 +1,6 @@
 #ifndef ARRAY_H
 #define ARRAY_H
 
-#include "slice.h"
 #include "memory.h"
 #include <type_traits>
 #include <utility>
@@ -60,9 +59,12 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-    Allocator*       m_allocator{nullptr};
-    Slice<ValueType> m_data{};
-    size_type        m_capacity{0};
+    Allocator* m_allocator{nullptr};
+    ValueType* m_ptr{nullptr};
+    size_type  m_len{0};
+    size_type  m_capacity{0};
+
+    Array() = default;
 
     explicit Array(Allocator* allocator) noexcept
         : m_allocator(allocator)
@@ -75,7 +77,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     {
         if (m_capacity > 0)
         {
-            m_data.m_ptr = m_allocator->alloc<value_type>(m_capacity);
+            m_ptr = m_allocator->alloc<value_type>(m_capacity);
         }
     }
 
@@ -85,8 +87,8 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     {
         if (m_capacity > 0)
         {
-            m_data.m_ptr = m_allocator->alloc<value_type>(m_capacity);
-            m_data.m_len = length;
+            m_ptr = m_allocator->alloc<value_type>(m_capacity);
+            m_len = length;
         }
     }
 
@@ -96,18 +98,19 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         {
             if (m_capacity > 0)
             {
-                m_allocator->free(m_data.m_ptr, m_capacity);
+                m_allocator->free(m_ptr, m_capacity);
             }
-            m_capacity   = 0;
-            m_data.m_len = 0;
-            m_data.m_ptr = nullptr;
-            m_allocator  = nullptr;
+            m_capacity  = 0;
+            m_len       = 0;
+            m_ptr       = nullptr;
+            m_allocator = nullptr;
         }
     }
 
     Array(Array&& other) noexcept
         : m_allocator(std::exchange(other.m_allocator, nullptr))
-        , m_data(std::exchange(other.m_data, Slice<ValueType>()))
+        , m_ptr(std::exchange(m_ptr, nullptr))
+        , m_len(std::exchange(other.m_len, 0))
         , m_capacity(std::exchange(other.m_capacity, 0))
     {
     }
@@ -115,7 +118,8 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     Array& operator=(Array&& other) noexcept
     {
         m_allocator = std::exchange(other.m_allocator, nullptr);
-        m_data      = std::exchange(other.m_data, Slice<ValueType>());
+        m_ptr       = std::exchange(other.m_ptr, nullptr);
+        m_len       = std::exchange(other.m_len, 0);
         m_capacity  = std::exchange(other.m_capacity, 0);
         return *this;
     }
@@ -123,16 +127,17 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     Array(const Array&)                  = delete;
     Array& operator=(const Array& other) = delete;
 
-    Slice<value_type>&       data() { return m_data; }
-    const Slice<value_type>& data() const { return m_data; }
+    pointer       data() { return m_ptr; }
+    const_pointer data() const { return m_ptr; }
+    size_type     len() const { return m_len; }
 
     void check_reserve(size_type added_elements_length = 1)
     {
-        if (m_capacity + added_elements_length >= m_data.len())
+        if (m_capacity + added_elements_length >= m_len)
         {
             auto new_capacity = GrowthFormula{}(m_capacity + added_elements_length);
             Assert(new_capacity > m_capacity);
-            m_allocator->realloc(m_data.m_ptr, m_capacity, new_capacity);
+            m_allocator->realloc(m_ptr, m_capacity, new_capacity);
             m_capacity = new_capacity;
         }
     }
@@ -140,15 +145,15 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     void append(const_reference value)
     {
         check_reserve();
-        m_data[m_data.len()] = value;
-        m_data.m_len++;
+        m_ptr[m_len] = value;
+        m_len++;
     }
 
     void append(value_type&& value)
     {
         check_reserve();
-        m_data[m_data.len()] = std::forward<value_type>(value);
-        m_data.m_len++;
+        m_ptr[m_len] = std::forward<value_type>(value);
+        m_len++;
     }
 
     void append_many(pointer ptr, size_type length)
@@ -157,12 +162,16 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         check_reserve(length);
         for (size_type i = 0; i < length; i++)
         {
-            m_data[m_data.len()] = ptr[i];
-            m_data.m_len++;
+            m_ptr[m_len] = ptr[i];
+            m_len++;
         }
     }
 
-    void clear() { m_data = Slice<ValueType>(); }
+    void clear()
+    {
+        std::memset(m_ptr, 0, m_capacity * sizeof(value_type));
+        m_len = 0;
+    }
 };
 
 #endif

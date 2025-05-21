@@ -1,6 +1,7 @@
 #ifndef SLICE_H
 #define SLICE_H
 
+#include "array.h"
 #include "defines.h"
 #include "memory.h"
 #include <algorithm>
@@ -62,12 +63,11 @@ template <typename ValueType> struct Slice
     }
 
     // implicit constructor for intializer lists;
-    // commented out as initializer lists aren't literals? - TBC
-    // constexpr Slice(std::initializer_list<value_type> init_list) noexcept
-    //     : m_ptr(init_list.begin())
-    //     , m_len(init_list.size())
-    // {
-    // }
+    constexpr Slice(std::initializer_list<value_type> init_list) noexcept
+        : m_ptr(init_list.begin())
+        , m_len(init_list.size())
+    {
+    }
 
     // [start..)
     constexpr Slice slice_from(size_type start) const noexcept { return slice(start, len()); }
@@ -186,28 +186,28 @@ template <typename ValueType> struct Slice
         return true;
     }
 
-    constexpr bool has_prefix(const Slice<value_type>& needle) const
+    constexpr bool starts_with(const Slice<value_type>& needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()));
     }
 
-    constexpr bool has_prefix(const Slice<value_type>& needle, PredicateType&& predicate) const
+    constexpr bool starts_with(const Slice<value_type>& needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()), std::forward<PredicateType>(predicate));
     }
 
-    constexpr bool has_suffix(const Slice<value_type>& needle) const
+    constexpr bool ends_with(const Slice<value_type>& needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_from_back(needle.len()));
     }
 
-    constexpr bool has_suffix(const Slice<value_type>& needle, PredicateType&& predicate) const
+    constexpr bool ends_with(const Slice<value_type>& needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
@@ -271,6 +271,66 @@ template <typename ValueType> struct Slice
             return Slice(ptr, m_len);
         }
         return Slice(nullptr, 0);
+    }
+
+    constexpr void split_once(const_reference sep, Slice& lhs, Slice& rhs)
+    {
+        i64 index = linear_search(sep);
+        if (index == -1)
+        {
+            lhs.m_len = m_len;
+            lhs.m_ptr = m_ptr;
+            rhs.m_len = 0;
+            rhs.m_ptr = nullptr;
+        }
+        else
+        {
+            lhs.m_len = index + 1;
+            lhs.m_ptr = m_ptr;
+            rhs.m_len = m_len - lhs.m_len;
+            rhs.m_ptr = m_ptr;
+        }
+    }
+
+    constexpr Array<Slice<value_type>> split(Allocator* allocator, const_reference sep)
+    {
+        Array<Slice<value_type>> res{allocator, 2};
+        for (u64 pos = 0; pos < len();)
+        {
+            Slice<value_type> rem{m_ptr + pos, len() - pos};
+            i64               index = rem.linear_search(sep);
+            if (index == -1)
+            {
+                res.append(rem.slice_from(pos));
+                break;
+            }
+            else
+            {
+                res.append(rem.slice(pos, index + 1));
+                pos += index + 1;
+            }
+        }
+        return res;
+    }
+
+    constexpr Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep)
+    {
+        Array<Slice<value_type>> res{allocator, 1};
+        if (len() <= sep.len())
+        {
+            res.append(*this);
+            return res;
+        }
+        for (u64 pos = 0; pos < len() - sep.len(); pos++)
+        {
+            Slice<value_type> rem{m_ptr + pos, len() - pos};
+            if (rem.starts_with(sep))
+            {
+                res.append(rem.slice_to(sep.len()));
+                pos += sep.len();
+            }
+        }
+        return res;
     }
 };
 
