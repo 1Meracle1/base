@@ -1,7 +1,7 @@
 #ifndef SLICE_H
 #define SLICE_H
 
-#include "array.h"
+// #include "array.h"
 #include "defines.h"
 #include "memory.h"
 #include <algorithm>
@@ -13,6 +13,11 @@
 #include <iterator>
 #include <type_traits>
 
+template <typename T>
+concept SliceValueTypeConcept = requires(T t) {
+    { !std::is_same_v<T, void> && sizeof(T) != 0 };
+};
+
 template <typename F, typename ValueType>
 concept SliceElementEqualityPredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
     { f(lhs, rhs) } -> std::same_as<bool>;
@@ -23,7 +28,7 @@ concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType
     { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
 };
 
-template <typename ValueType> struct Slice
+template <SliceValueTypeConcept ValueType> struct Slice
 {
     using value_type      = ValueType;
     using pointer         = ValueType*;
@@ -38,8 +43,8 @@ template <typename ValueType> struct Slice
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-    pointer   m_ptr = nullptr;
-    size_type m_len = 0;
+    pointer   m_ptr;
+    size_type m_len;
 
   public:
     constexpr Slice() noexcept
@@ -69,6 +74,19 @@ template <typename ValueType> struct Slice
     {
     }
 
+    template <SliceValueTypeConcept NewValueType> constexpr Slice<NewValueType> reinterpret_elements_as() noexcept
+    {
+        if (empty())
+        {
+            return Slice<NewValueType>();
+        }
+        size_type size_bytes = len() * sizeof(value_type);
+        // should we allow data truncation?
+        // if (size_bytes % sizeof(NewValueType) != 0) {}
+        size_type new_len = size_bytes / sizeof(NewValueType);
+        return Slice<NewValueType>(cast(NewValueType*) m_ptr, new_len);
+    }
+
     // [start..)
     constexpr Slice slice_from(size_type start) const noexcept { return slice(start, len()); }
 
@@ -87,10 +105,31 @@ template <typename ValueType> struct Slice
         return Slice(data, len);
     }
 
+    // [start..)
+    constexpr Slice slice_from_unchecked(size_type start) const noexcept { return slice_unchecked(start, len()); }
+
+    // [..end)
+    constexpr Slice slice_to_unchecked(size_type end) const noexcept { return slice_unchecked(0, end); }
+
+    // [end-start..)
+    constexpr Slice slice_from_back_unchecked(size_type length) const noexcept
+    {
+        return slice_unchecked(len() - length, len());
+    }
+
+    // [start, end)
+    constexpr Slice slice_unchecked(size_type start, size_type end) const noexcept
+    {
+        size_type   len  = end - start;
+        value_type* data = len == 0 ? nullptr : m_ptr + start;
+        return Slice(data, len);
+    }
+
     constexpr pointer       data() noexcept { return m_ptr; }
     constexpr const_pointer data() const noexcept { return m_ptr; }
     constexpr size_type     len() const noexcept { return m_len; }
     constexpr bool          empty() const noexcept { return len() == 0; }
+    constexpr bool          not_empty() const noexcept { return len() > 0; }
 
     reference       operator[](size_type i) { return m_ptr[i]; }
     const_reference operator[](size_type i) const { return m_ptr[i]; }
@@ -292,45 +331,59 @@ template <typename ValueType> struct Slice
         }
     }
 
-    constexpr Array<Slice<value_type>> split(Allocator* allocator, const_reference sep)
+    // constexpr Array<Slice<value_type>> split(Allocator* allocator, const_reference sep)
+    // {
+    //     Array<Slice<value_type>> res{allocator, 2};
+    //     for (u64 pos = 0; pos < len();)
+    //     {
+    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
+    //         i64               index = rem.linear_search(sep);
+    //         if (index == -1)
+    //         {
+    //             res.append(rem.slice_from(pos));
+    //             break;
+    //         }
+    //         else
+    //         {
+    //             res.append(rem.slice(pos, index + 1));
+    //             pos += index + 1;
+    //         }
+    //     }
+    //     return res;
+    // }
+
+    // constexpr Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep)
+    // {
+    //     Array<Slice<value_type>> res{allocator, 1};
+    //     if (len() <= sep.len())
+    //     {
+    //         res.append(*this);
+    //         return res;
+    //     }
+    //     for (u64 pos = 0; pos < len() - sep.len(); pos++)
+    //     {
+    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
+    //         if (rem.starts_with(sep))
+    //         {
+    //             res.append(rem.slice_to(sep.len()));
+    //             pos += sep.len();
+    //         }
+    //     }
+    //     return res;
+    // }
+
+    constexpr void split_at(size_type mid, Slice& lhs, Slice& rhs)
     {
-        Array<Slice<value_type>> res{allocator, 2};
-        for (u64 pos = 0; pos < len();)
-        {
-            Slice<value_type> rem{m_ptr + pos, len() - pos};
-            i64               index = rem.linear_search(sep);
-            if (index == -1)
-            {
-                res.append(rem.slice_from(pos));
-                break;
-            }
-            else
-            {
-                res.append(rem.slice(pos, index + 1));
-                pos += index + 1;
-            }
-        }
-        return res;
+        Assert(mid >= 0 && mid <= len());
+        lhs = slice_to(mid);
+        rhs = slice_from(mid);
     }
 
-    constexpr Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep)
+    // SAFETY: Caller has to check that `0 <= mid <= self.len()`
+    constexpr void split_at_unchecked(size_type mid, Slice& lhs, Slice& rhs)
     {
-        Array<Slice<value_type>> res{allocator, 1};
-        if (len() <= sep.len())
-        {
-            res.append(*this);
-            return res;
-        }
-        for (u64 pos = 0; pos < len() - sep.len(); pos++)
-        {
-            Slice<value_type> rem{m_ptr + pos, len() - pos};
-            if (rem.starts_with(sep))
-            {
-                res.append(rem.slice_to(sep.len()));
-                pos += sep.len();
-            }
-        }
-        return res;
+        lhs = slice_to_unchecked(mid);
+        rhs = slice_from_unchecked(mid);
     }
 };
 
