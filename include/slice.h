@@ -15,7 +15,7 @@
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {
-    { !std::is_same_v<T, void> && sizeof(T) != 0 };
+    { !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T> };
 };
 
 template <typename F, typename ValueType>
@@ -68,11 +68,14 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     // implicit constructor for intializer lists;
-    constexpr Slice(std::initializer_list<value_type> init_list) noexcept
-        : m_ptr(init_list.begin())
-        , m_len(init_list.size())
-    {
-    }
+    // SAFETY: rough maniacs governing c++ standards decided it is a good idea,
+    // for initializer_list to have internal temp array and have its address
+    // returned by the .begin() call.
+    // constexpr Slice(std::initializer_list<value_type> init_list) noexcept
+    //     : m_ptr(init_list.begin())
+    //     , m_len(init_list.size())
+    // {
+    // }
 
     template <SliceValueTypeConcept NewValueType> constexpr Slice<NewValueType> reinterpret_elements_as() noexcept
     {
@@ -180,16 +183,27 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return -1;
     }
 
-    constexpr bool contains_value(const_reference v) const
-        requires(std::equality_comparable<value_type>)
-    {
-        return linear_search(v) != -1;
-    }
+    constexpr bool contains(const_reference v) const { return linear_search(v) != -1; }
 
-    constexpr bool contains_value(const_reference v, PredicateType&& predicate) const
-        requires(std::equality_comparable<value_type>)
+    constexpr bool contains(const_reference v, PredicateType&& predicate) const
     {
         return linear_search(v, std::forward<PredicateType>(predicate)) != -1;
+    }
+
+    constexpr bool contains(Slice<value_type> needle) const
+    {
+        if (needle.len() > len())
+        {
+            return false;
+        }
+        for (size_type i = 0; i < len() - needle.len(); i++)
+        {
+            if (slice(i, needle.len()).equal(needle))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     void zero()
@@ -300,7 +314,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         std::sort(begin(), end(), std::forward<SliceElementWeakOrderingComparePredicate<F, value_type>>(f));
     }
 
-    Slice clone(Allocator* allocator)
+    Slice clone(Allocator* allocator) const
     {
         if (m_len > 0)
         {
@@ -312,7 +326,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return Slice(nullptr, 0);
     }
 
-    constexpr void split_once(const_reference sep, Slice& lhs, Slice& rhs)
+    constexpr void split_once(const_reference sep, Slice& lhs, Slice& rhs) const
     {
         i64 index = linear_search(sep);
         if (index == -1)
@@ -372,7 +386,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     //     return res;
     // }
 
-    constexpr void split_at(size_type mid, Slice& lhs, Slice& rhs)
+    constexpr void split_at(size_type mid, Slice& lhs, Slice& rhs) const
     {
         Assert(mid >= 0 && mid <= len());
         lhs = slice_to(mid);
@@ -380,10 +394,41 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     // SAFETY: Caller has to check that `0 <= mid <= self.len()`
-    constexpr void split_at_unchecked(size_type mid, Slice& lhs, Slice& rhs)
+    constexpr void split_at_unchecked(size_type mid, Slice& lhs, Slice& rhs) const
     {
         lhs = slice_to_unchecked(mid);
         rhs = slice_from_unchecked(mid);
+    }
+
+    constexpr Slice<value_type> trim_left(Slice<value_type> trimmed_elements) const
+    {
+        size_type i = 0;
+        for (; i < len(); i++)
+        {
+            if (trimmed_elements.linear_search(m_ptr[i]) == -1)
+            {
+                break;
+            }
+        }
+        return slice_from(i);
+    }
+
+    constexpr Slice<value_type> trim_right(Slice<value_type> trimmed_elements) const
+    {
+        i64 i = m_len - 1;
+        for (; i >= 0; i--)
+        {
+            if (trimmed_elements.linear_search(m_ptr[i]) == -1)
+            {
+                break;
+            }
+        }
+        return slice_to(i);
+    }
+
+    constexpr Slice<value_type> trim(Slice<value_type> trimmed_elements) const
+    {
+        return trim_left(trimmed_elements).trim_right(trimmed_elements);
     }
 };
 

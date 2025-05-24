@@ -60,6 +60,10 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
 
+    using iterator_category = std::contiguous_iterator_tag;
+    using iterator          = pointer;
+    using const_iterator    = const_pointer;
+
     Allocator* m_allocator{nullptr};
     ValueType* m_ptr{nullptr};
     size_type  m_len{0};
@@ -67,7 +71,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     Array() = default;
 
-    explicit Array(Slice<value_type> slice) noexcept
+    constexpr explicit Array(Slice<value_type> slice) noexcept
         : m_ptr(slice.m_ptr)
         , m_len(slice.m_len)
     {
@@ -83,7 +87,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         }
     }
 
-    explicit Array(Allocator* allocator) noexcept
+    constexpr explicit Array(Allocator* allocator) noexcept
         : m_allocator(allocator)
     {
     }
@@ -111,7 +115,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     ~Array() noexcept { free_allocated_memory(); }
 
-    Array(Array&& other) noexcept
+    constexpr Array(Array&& other) noexcept
         : m_allocator(std::exchange(other.m_allocator, nullptr))
         , m_ptr(std::exchange(m_ptr, nullptr))
         , m_len(std::exchange(other.m_len, 0))
@@ -119,7 +123,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     {
     }
 
-    Array& operator=(Array&& other) noexcept
+    constexpr Array& operator=(Array&& other) noexcept
     {
         free_allocated_memory();
         m_allocator = std::exchange(other.m_allocator, nullptr);
@@ -132,9 +136,26 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     Array(const Array&)                  = delete;
     Array& operator=(const Array& other) = delete;
 
-    pointer       data() { return m_ptr; }
-    const_pointer data() const { return m_ptr; }
-    size_type     len() const { return m_len; }
+    reference       operator[](size_type i) { return m_ptr[i]; }
+    const_reference operator[](size_type i) const { return m_ptr[i]; }
+
+    reference       front() { return m_ptr[0]; }
+    const_reference front() const { return m_ptr[0]; }
+    reference       back() { return m_ptr[len() - 1]; }
+    const_reference back() const { return m_ptr[len() - 1]; }
+
+    constexpr pointer       data() { return m_ptr; }
+    constexpr const_pointer data() const { return m_ptr; }
+    constexpr size_type     len() const { return m_len; }
+
+    iterator       begin() { return m_ptr; }
+    iterator       end() { return m_ptr + m_len; }
+    const_iterator begin() const { return m_ptr; }
+    const_iterator end() const { return m_ptr + m_len; }
+    const_iterator cbegin() const { return m_ptr; }
+    const_iterator cend() const { return m_ptr + m_len; }
+
+    constexpr Slice<value_type> view() const { return Slice(m_ptr, m_len); }
 
     void check_reserve(size_type added_elements_length = 1)
     {
