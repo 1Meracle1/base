@@ -257,6 +257,19 @@ static constexpr u32 utf8_decode_first_codepoint(Slice<const u8> bytes, std::siz
 }
 } // namespace string_impl
 
+/*
+    // String str = String::from_utf8_lossy(
+    //     allocator, "In the quiet twilight, dreams unfold, soft whispers of a story untold.\n"
+    //                "ćeść panśtwu\n"
+    //                "月明かりが静かに照らし出し、夢を見る心の奥で詩が静かに囁かれる\n"
+    //                "Stars collide in the early light of hope, echoing the silent call of the night.\n"
+    //                "夜の静寂、希望と孤独が混ざり合うその中で詩が永遠に続く\n");
+    // for (u32 codepoint : str)
+    // {
+    //     std::cout << std::hex << codepoint << (codepoint == cast(u32)0xA ? '\n' : ' ');
+    // }
+*/
+
 class CodepointIterator
 {
   public:
@@ -314,6 +327,7 @@ class CodepointIterator
         Assert(m_current_byte_ptr < m_end_byte_ptr);
         return m_current_codepoint;
     }
+
     const_pointer operator->() const
     {
         Assert(m_current_byte_ptr < m_end_byte_ptr);
@@ -349,8 +363,6 @@ struct String
   private:
     Array<value_type> m_data{};
 
-    String() = default;
-
     String(Slice<value_type> bytes)
         : m_data(bytes)
     {
@@ -360,6 +372,8 @@ struct String
     void push(value_type byte) { m_data.append(byte); }
 
   public:
+    String() = default;
+
     String(Allocator* allocator)
         : m_data(allocator)
     {
@@ -389,7 +403,12 @@ struct String
 
     static String from_utf8_lossy(Allocator* allocator, Slice<const char> bytes)
     {
-        return from_utf8_lossy(allocator, bytes.reinterpret_elements_as<value_type>());
+        auto res = bytes.reinterpret_elements_as<value_type>();
+        if (res.back() == 0)
+        {
+            res = res.slice_to(res.len() - 1);
+        }
+        return from_utf8_lossy(allocator, res);
     }
 
     static String from_utf8_lossy(Allocator* allocator, Slice<value_type> bytes)
@@ -423,6 +442,25 @@ struct String
         return res;
     }
 
+    static String from_raw(Allocator* allocator, Slice<const char> bytes)
+    {
+        auto res = bytes.reinterpret_elements_as<value_type>();
+        if (res.back() == 0)
+        {
+            res = res.slice_to(res.len() - 1);
+        }
+        return from_raw(allocator, res);
+    }
+
+    static String from_raw(Allocator* allocator, Slice<value_type> bytes)
+    {
+        String str{allocator, bytes.len()};
+        str.push_str(bytes);
+        return str;
+    }
+
+    void check_reserve(size_type added_elements_length = 1) { m_data.check_reserve(added_elements_length); }
+
     void push(u32 codepoint)
     {
         auto len = string_impl::utf8_len(codepoint);
@@ -438,12 +476,16 @@ struct String
         }
     }
 
+    void push_str(Slice<const char> cstr) { push_str(cstr.reinterpret_elements_as<value_type>()); }
     void push_str(Slice<value_type> bytes) { m_data.append_many(bytes); }
 
     // methods handling string as an array of bytes
     constexpr size_type      len_bytes() const { return m_data.len(); }
+    bool                     empty() const { return len_bytes() == 0; }
+    bool                     not_empty() const { return !empty(); }
     Array<value_type>&       data() { return m_data; }
     const Array<value_type>& data() const { return m_data; }
+    const Slice<value_type>  view() const { return m_data.view(); }
 
     String substring_bytes(size_type from, size_type to) const { return String(m_data.view().slice(from, to)); }
     String substring_from_bytes(size_type from) const { return String(m_data.view().slice_from(from)); }

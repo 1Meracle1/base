@@ -2,6 +2,7 @@
 #define DEFER_H
 
 #include <utility>
+#include "defines.h"
 
 template <typename F> struct ScopeExit
 {
@@ -15,9 +16,6 @@ template <typename F> struct ScopeExit
 
     F f;
 };
-
-#define CONCATENATE_DETAIL(x, y) x##y
-#define CONCATENATE(x, y) CONCATENATE_DETAIL(x, y)
 
 // runs lambda with reference capture of the surrounding scope, at scope exit
 #define defer(lambda) auto CONCATENATE(_defer_, __COUNTER__) = ScopeExit(lambda)

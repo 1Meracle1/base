@@ -21,4 +21,7 @@
 #define Gigabytes(x) (Megabytes(x) * (i64)(1024))
 #define Terabytes(x) (Gigabytes(x) * (i64)(1024))
 
+#define CONCATENATE_DETAIL(x, y) x##y
+#define CONCATENATE(x, y) CONCATENATE_DETAIL(x, y)
+
 #endif

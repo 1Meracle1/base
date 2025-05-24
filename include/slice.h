@@ -77,7 +77,8 @@ template <SliceValueTypeConcept ValueType> struct Slice
     // {
     // }
 
-    template <SliceValueTypeConcept NewValueType> constexpr Slice<NewValueType> reinterpret_elements_as() noexcept
+    template <SliceValueTypeConcept NewValueType>
+    [[nodiscard]] constexpr Slice<NewValueType> reinterpret_elements_as() noexcept
     {
         if (empty())
         {
@@ -91,16 +92,19 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     // [start..)
-    constexpr Slice slice_from(size_type start) const noexcept { return slice(start, len()); }
+    [[nodiscard]] constexpr Slice slice_from(size_type start) const noexcept { return slice(start, len()); }
 
     // [..end)
-    constexpr Slice slice_to(size_type end) const noexcept { return slice(0, end); }
+    [[nodiscard]] constexpr Slice slice_to(size_type end) const noexcept { return slice(0, end); }
 
     // [end-start..)
-    constexpr Slice slice_from_back(size_type length) const noexcept { return slice(len() - length, len()); }
+    [[nodiscard]] constexpr Slice slice_from_back(size_type length) const noexcept
+    {
+        return slice(len() - length, len());
+    }
 
     // [start, end)
-    constexpr Slice slice(size_type start, size_type end) const noexcept
+    [[nodiscard]] constexpr Slice slice(size_type start, size_type end) const noexcept
     {
         Assert(start <= len() && end <= len());
         size_type   len  = end - start;
@@ -108,53 +112,77 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return Slice(data, len);
     }
 
+    [[nodiscard]] constexpr Slice take(size_type count) const { return slice_to(count); }
+    [[nodiscard]] constexpr Slice take_max(size_type count) const
+    {
+        size_type actual_count = std::min(count, len());
+        return slice_to(actual_count);
+    }
+
+    [[nodiscard]] constexpr Slice drop(size_type count) const { return slice_from(count); }
+    [[nodiscard]] constexpr Slice drop_back(size_type count) const
+    {
+        Assert(count <= len());
+        return slice_to(len() - count);
+    }
+
     // [start..)
-    constexpr Slice slice_from_unchecked(size_type start) const noexcept { return slice_unchecked(start, len()); }
+    [[nodiscard]] constexpr Slice slice_from_unchecked(size_type start) const noexcept
+    {
+        return slice_unchecked(start, len());
+    }
 
     // [..end)
-    constexpr Slice slice_to_unchecked(size_type end) const noexcept { return slice_unchecked(0, end); }
+    [[nodiscard]] constexpr Slice slice_to_unchecked(size_type end) const noexcept { return slice_unchecked(0, end); }
 
     // [end-start..)
-    constexpr Slice slice_from_back_unchecked(size_type length) const noexcept
+    [[nodiscard]] constexpr Slice slice_from_back_unchecked(size_type length) const noexcept
     {
         return slice_unchecked(len() - length, len());
     }
 
     // [start, end)
-    constexpr Slice slice_unchecked(size_type start, size_type end) const noexcept
+    [[nodiscard]] constexpr Slice slice_unchecked(size_type start, size_type end) const noexcept
     {
         size_type   len  = end - start;
         value_type* data = len == 0 ? nullptr : m_ptr + start;
         return Slice(data, len);
     }
 
-    constexpr pointer       data() noexcept { return m_ptr; }
-    constexpr const_pointer data() const noexcept { return m_ptr; }
-    constexpr size_type     len() const noexcept { return m_len; }
-    constexpr bool          empty() const noexcept { return len() == 0; }
-    constexpr bool          not_empty() const noexcept { return len() > 0; }
+    [[nodiscard]] constexpr pointer       data() noexcept { return m_ptr; }
+    [[nodiscard]] constexpr const_pointer data() const noexcept { return m_ptr; }
+    [[nodiscard]] constexpr size_type     len() const noexcept { return m_len; }
+    [[nodiscard]] constexpr bool          empty() const noexcept { return len() == 0; }
+    [[nodiscard]] constexpr bool          not_empty() const noexcept { return len() > 0; }
 
-    reference       operator[](size_type i) { return m_ptr[i]; }
-    const_reference operator[](size_type i) const { return m_ptr[i]; }
+    [[nodiscard]] reference       operator[](size_type i) { return m_ptr[i]; }
+    [[nodiscard]] const_reference operator[](size_type i) const { return m_ptr[i]; }
 
-    iterator       begin() { return m_ptr; }
-    iterator       end() { return m_ptr + len(); }
-    const_iterator begin() const { return m_ptr; }
-    const_iterator end() const { return m_ptr + len(); }
-    const_iterator cbegin() const { return m_ptr; }
-    const_iterator cend() const { return m_ptr + len(); }
+    [[nodiscard]] iterator       begin() { return m_ptr; }
+    [[nodiscard]] iterator       end() { return m_ptr + len(); }
+    [[nodiscard]] const_iterator begin() const { return m_ptr; }
+    [[nodiscard]] const_iterator end() const { return m_ptr + len(); }
+    [[nodiscard]] const_iterator cbegin() const { return m_ptr; }
+    [[nodiscard]] const_iterator cend() const { return m_ptr + len(); }
 
-    std::reverse_iterator<iterator>       rbegin() { return std::reverse_iterator<iterator>(end()); }
-    std::reverse_iterator<iterator>       rend() { return std::reverse_iterator<iterator>(begin()); }
-    std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator<const_iterator>(end()); }
-    std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator<const_iterator>(begin()); }
-    std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
-    std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator<const_iterator>(cbegin()); }
+    [[nodiscard]] std::reverse_iterator<iterator>       rbegin() { return std::reverse_iterator<iterator>(end()); }
+    [[nodiscard]] std::reverse_iterator<iterator>       rend() { return std::reverse_iterator<iterator>(begin()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator<const_iterator>(end()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator<const_iterator>(begin()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator<const_iterator>(cbegin()); }
 
-    reference       front() { return m_ptr[0]; }
-    const_reference front() const { return m_ptr[0]; }
-    reference       back() { return m_ptr[len() - 1]; }
-    const_reference back() const { return m_ptr[len() - 1]; }
+    [[nodiscard]] reference       front() { return m_ptr[0]; }
+    [[nodiscard]] const_reference front() const { return m_ptr[0]; }
+
+    [[nodiscard]] reference       first() { return m_ptr[0]; }
+    [[nodiscard]] const_reference first() const { return m_ptr[0]; }
+
+    [[nodiscard]] reference       back() { return m_ptr[len() - 1]; }
+    [[nodiscard]] const_reference back() const { return m_ptr[len() - 1]; }
+
+    [[nodiscard]] reference       last() { return m_ptr[len() - 1]; }
+    [[nodiscard]] const_reference last() const { return m_ptr[len() - 1]; }
 
     constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
 
@@ -165,7 +193,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
             swap(i, len() - i - 1);
     }
 
-    constexpr i64 linear_search(const_reference v) const
+    [[nodiscard]] constexpr i64 linear_search(const_reference v) const
     {
         for (size_type i = 0; i < len(); i++)
             if (m_ptr[i] == v)
@@ -175,7 +203,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     using PredicateType = std::function<bool(const_reference, const_reference)>;
 
-    constexpr i64 linear_search(const_reference v, PredicateType&& predicate) const
+    [[nodiscard]] constexpr i64 linear_search(const_reference v, PredicateType&& predicate) const
     {
         for (size_type i = 0; i < len(); i++)
             if (predicate(m_ptr[i], v))
@@ -267,7 +295,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return equal(slice_from_back(needle.len()), std::forward<PredicateType>(predicate));
     }
 
-    constexpr Slice unique()
+    [[nodiscard]] constexpr Slice unique()
     {
         if (len() < 2)
             return *this;
@@ -429,6 +457,15 @@ template <SliceValueTypeConcept ValueType> struct Slice
     constexpr Slice<value_type> trim(Slice<value_type> trimmed_elements) const
     {
         return trim_left(trimmed_elements).trim_right(trimmed_elements);
+    }
+
+    constexpr Slice chop_zero_termination() const
+    {
+        if (m_len > 0 && m_ptr[m_len - 1] == 0)
+        {
+            return slice_to(m_len - 1);
+        }
+        return *this;
     }
 };
 
