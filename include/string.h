@@ -363,15 +363,12 @@ struct String
   private:
     Array<value_type> m_data{};
 
+  public:
     String(Slice<value_type> bytes)
         : m_data(bytes)
     {
     }
 
-    // SAFETY: pushing arbitrary bytes can invalidate UTF-8 structure
-    void push(value_type byte) { m_data.append(byte); }
-
-  public:
     String() = default;
 
     String(Allocator* allocator)
@@ -476,8 +473,13 @@ struct String
         }
     }
 
+    void push(value_type byte) { m_data.append(byte); }
+
     void push_str(Slice<const char> cstr) { push_str(cstr.reinterpret_elements_as<value_type>()); }
+
     void push_str(Slice<value_type> bytes) { m_data.append_many(bytes); }
+
+    void reset_length() { m_data.reset_length(); }
 
     // methods handling string as an array of bytes
     constexpr size_type      len_bytes() const { return m_data.len(); }
@@ -506,6 +508,10 @@ struct String
         return m_data.view().trim_right(trimmed_chars.m_data.view());
     }
     String trim_bytes(String trimmed_chars) const { return m_data.view().trim(trimmed_chars.m_data.view()); }
+
+    Array<String> split(Allocator* allocator, value_type c) const {
+        return m_data.split(allocator, c);
+    }
 
     // iterators
     using iterator       = CodepointIterator;

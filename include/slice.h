@@ -31,10 +31,10 @@ concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType
 template <SliceValueTypeConcept ValueType> struct Slice
 {
     using value_type      = ValueType;
-    using pointer         = ValueType*;
-    using const_pointer   = const ValueType*;
-    using reference       = ValueType&;
-    using const_reference = const ValueType&;
+    using pointer         = value_type*;
+    using const_pointer   = const value_type*;
+    using reference       = value_type&;
+    using const_reference = std::conditional_t<std::is_trivially_copyable_v<value_type>, value_type, const value_type&>;
 
     using iterator_category = std::contiguous_iterator_tag;
     using iterator          = pointer;
@@ -155,34 +155,37 @@ template <SliceValueTypeConcept ValueType> struct Slice
     [[nodiscard]] constexpr bool          empty() const noexcept { return len() == 0; }
     [[nodiscard]] constexpr bool          not_empty() const noexcept { return len() > 0; }
 
+    // clang-format off
     [[nodiscard]] reference       operator[](size_type i) { return m_ptr[i]; }
-    [[nodiscard]] const_reference operator[](size_type i) const { return m_ptr[i]; }
+    [[nodiscard]] const_reference operator[](size_type i) const requires(!std::is_trivially_copyable_v<value_type>) { return m_ptr[i]; }
+    [[nodiscard]] value_type      operator[](size_type i) const requires( std::is_trivially_copyable_v<value_type>) { return m_ptr[i]; }
 
-    [[nodiscard]] iterator       begin() { return m_ptr; }
-    [[nodiscard]] iterator       end() { return m_ptr + len(); }
-    [[nodiscard]] const_iterator begin() const { return m_ptr; }
-    [[nodiscard]] const_iterator end() const { return m_ptr + len(); }
+    [[nodiscard]] iterator       begin()        { return m_ptr; }
+    [[nodiscard]] iterator       end()          { return m_ptr + len(); }
+    [[nodiscard]] const_iterator begin()  const { return m_ptr; }
+    [[nodiscard]] const_iterator end()    const { return m_ptr + len(); }
     [[nodiscard]] const_iterator cbegin() const { return m_ptr; }
-    [[nodiscard]] const_iterator cend() const { return m_ptr + len(); }
+    [[nodiscard]] const_iterator cend()   const { return m_ptr + len(); }
 
-    [[nodiscard]] std::reverse_iterator<iterator>       rbegin() { return std::reverse_iterator<iterator>(end()); }
-    [[nodiscard]] std::reverse_iterator<iterator>       rend() { return std::reverse_iterator<iterator>(begin()); }
-    [[nodiscard]] std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator<const_iterator>(end()); }
-    [[nodiscard]] std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator<const_iterator>(begin()); }
+    [[nodiscard]] std::reverse_iterator<iterator>       rbegin()        { return std::reverse_iterator<iterator>(end()); }
+    [[nodiscard]] std::reverse_iterator<iterator>       rend()          { return std::reverse_iterator<iterator>(begin()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> rbegin()  const { return std::reverse_iterator<const_iterator>(end()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> rend()    const { return std::reverse_iterator<const_iterator>(begin()); }
     [[nodiscard]] std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
-    [[nodiscard]] std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator<const_iterator>(cbegin()); }
+    [[nodiscard]] std::reverse_iterator<const_iterator> crend()   const { return std::reverse_iterator<const_iterator>(cbegin()); }
 
-    [[nodiscard]] reference       front() { return m_ptr[0]; }
+    [[nodiscard]] reference       front()       { return m_ptr[0]; }
     [[nodiscard]] const_reference front() const { return m_ptr[0]; }
 
-    [[nodiscard]] reference       first() { return m_ptr[0]; }
+    [[nodiscard]] reference       first()       { return m_ptr[0]; }
     [[nodiscard]] const_reference first() const { return m_ptr[0]; }
 
-    [[nodiscard]] reference       back() { return m_ptr[len() - 1]; }
+    [[nodiscard]] reference       back()       { return m_ptr[len() - 1]; }
     [[nodiscard]] const_reference back() const { return m_ptr[len() - 1]; }
 
-    [[nodiscard]] reference       last() { return m_ptr[len() - 1]; }
+    [[nodiscard]] reference       last()       { return m_ptr[len() - 1]; }
     [[nodiscard]] const_reference last() const { return m_ptr[len() - 1]; }
+    // clang-format on
 
     constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
 
@@ -240,14 +243,15 @@ template <SliceValueTypeConcept ValueType> struct Slice
             std::memset(m_ptr, 0, len());
     }
 
-    constexpr bool bytes_equal(const Slice<value_type>& other) const
+    constexpr bool bytes_equal(Slice<value_type> other) const
     {
         if (len() != other.len())
             return false;
         return std::memcmp(m_ptr, other.m_ptr, len() * sizeof(value_type)) == 0;
     }
 
-    constexpr bool equal(const Slice<value_type>& other) const
+    constexpr bool equal(Slice<value_type> other) const
+        requires(!std::is_trivially_copyable_v<value_type>)
     {
         if (len() != other.len())
             return false;
@@ -257,7 +261,13 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return true;
     }
 
-    constexpr bool equal(const Slice<value_type>& other, PredicateType&& predicate) const
+    constexpr bool equal(Slice<value_type> other) const
+        requires(std::is_trivially_copyable_v<value_type>)
+    {
+        return bytes_equal(other);
+    }
+
+    constexpr bool equal(Slice<value_type> other, PredicateType&& predicate) const
     {
         if (len() != other.m_len)
             return false;
@@ -267,28 +277,28 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return true;
     }
 
-    constexpr bool starts_with(const Slice<value_type>& needle) const
+    constexpr bool starts_with(Slice<value_type> needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()));
     }
 
-    constexpr bool starts_with(const Slice<value_type>& needle, PredicateType&& predicate) const
+    constexpr bool starts_with(Slice<value_type> needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_to(needle.len()), std::forward<PredicateType>(predicate));
     }
 
-    constexpr bool ends_with(const Slice<value_type>& needle) const
+    constexpr bool ends_with(Slice<value_type> needle) const
     {
         if (len() < needle.len())
             return false;
         return equal(slice_from_back(needle.len()));
     }
 
-    constexpr bool ends_with(const Slice<value_type>& needle, PredicateType&& predicate) const
+    constexpr bool ends_with(Slice<value_type> needle, PredicateType&& predicate) const
     {
         if (len() < needle.len())
             return false;
@@ -372,47 +382,6 @@ template <SliceValueTypeConcept ValueType> struct Slice
             rhs.m_ptr = m_ptr;
         }
     }
-
-    // constexpr Array<Slice<value_type>> split(Allocator* allocator, const_reference sep)
-    // {
-    //     Array<Slice<value_type>> res{allocator, 2};
-    //     for (u64 pos = 0; pos < len();)
-    //     {
-    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
-    //         i64               index = rem.linear_search(sep);
-    //         if (index == -1)
-    //         {
-    //             res.append(rem.slice_from(pos));
-    //             break;
-    //         }
-    //         else
-    //         {
-    //             res.append(rem.slice(pos, index + 1));
-    //             pos += index + 1;
-    //         }
-    //     }
-    //     return res;
-    // }
-
-    // constexpr Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep)
-    // {
-    //     Array<Slice<value_type>> res{allocator, 1};
-    //     if (len() <= sep.len())
-    //     {
-    //         res.append(*this);
-    //         return res;
-    //     }
-    //     for (u64 pos = 0; pos < len() - sep.len(); pos++)
-    //     {
-    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
-    //         if (rem.starts_with(sep))
-    //         {
-    //             res.append(rem.slice_to(sep.len()));
-    //             pos += sep.len();
-    //         }
-    //     }
-    //     return res;
-    // }
 
     constexpr void split_at(size_type mid, Slice& lhs, Slice& rhs) const
     {

@@ -52,10 +52,10 @@ struct GrowthFormulaDefault
 template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormulaDefault> struct Array
 {
     using value_type      = ValueType;
-    using pointer         = ValueType*;
-    using const_pointer   = const ValueType*;
-    using reference       = ValueType&;
-    using const_reference = const ValueType&;
+    using pointer         = value_type*;
+    using const_pointer   = const value_type*;
+    using reference       = value_type&;
+    using const_reference = std::conditional_t<std::is_trivially_copyable_v<value_type>, value_type, const value_type&>;
 
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -80,11 +80,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     explicit Array(Allocator* allocator, Slice<value_type> slice) noexcept
         : m_allocator(allocator)
     {
-        if (!slice.empty())
-        {
-            m_ptr = m_allocator->alloc<value_type>(slice.m_len);
-            m_len = slice.m_len;
-        }
+        append_many(slice);
     }
 
     constexpr explicit Array(Allocator* allocator) noexcept
@@ -176,13 +172,25 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     }
 
     void append(value_type&& value)
+        requires(!std::is_trivially_copyable_v<value_type>)
     {
         check_reserve();
         m_ptr[m_len] = std::forward<value_type>(value);
         m_len++;
     }
 
+    // meant to be used in scenarios when non-trivial objects are used
+    // in order to avoid extra copies
+    // ` auto ptr = array.alloc_element();
+    // ` ptr->x = 2;
+    [[nodiscard]] pointer append()
+    {
+        check_reserve();
+        return m_ptr[m_len];
+    }
+
     void append_many(Slice<value_type> elements)
+        requires(!std::is_trivially_copyable_v<value_type>)
     {
         if (!elements.empty())
         {
@@ -195,11 +203,18 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         }
     }
 
-    void clear()
+    void append_many(Slice<value_type> elements)
+        requires(std::is_trivially_copyable_v<value_type>)
     {
-        std::memset(m_ptr, 0, m_capacity * sizeof(value_type));
-        m_len = 0;
+        if (!elements.empty())
+        {
+            check_reserve(elements.len());
+            std::memcpy(m_ptr[m_len], elements.data(), elements.len());
+            m_len += elements.len();
+        }
     }
+
+    void reset_length() { m_len = 0; }
 
     void free_allocated_memory()
     {
@@ -211,6 +226,49 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         m_len       = 0;
         m_ptr       = nullptr;
         m_allocator = nullptr;
+    }
+
+    
+
+    [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, const_reference sep) const
+    {
+        Array<Slice<value_type>> res{allocator, 2};
+        for (u64 pos = 0; pos < len();)
+        {
+            Slice<value_type> rem{m_ptr + pos, len() - pos};
+            i64               index = rem.linear_search(sep);
+            if (index == -1)
+            {
+                res.append(rem.slice_from(pos));
+                break;
+            }
+            else
+            {
+                res.append(rem.slice(pos, index + 1));
+                pos += index + 1;
+            }
+        }
+        return res;
+    }
+
+    [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep) const
+    {
+        Array<Slice<value_type>> res{allocator, 1};
+        if (len() <= sep.len())
+        {
+            res.append(*this);
+            return res;
+        }
+        for (u64 pos = 0; pos < len() - sep.len(); pos++)
+        {
+            Slice<value_type> rem{m_ptr + pos, len() - pos};
+            if (rem.starts_with(sep))
+            {
+                res.append(rem.slice_to(sep.len()));
+                pos += sep.len();
+            }
+        }
+        return res;
     }
 };
 

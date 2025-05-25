@@ -23,8 +23,9 @@ template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> st
     {
         return ParseIntFromStringError::EmptyString;
     }
-    i64  sign = 1;
-    auto it   = str.begin();
+    i64  sign  = 1;
+    auto it    = str.begin();
+    auto itEnd = str.end();
     if (u8 first = *it; first == '+')
     {
         it++;
@@ -42,7 +43,7 @@ template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> st
         }
     }
 
-    if (it == str.end())
+    if (it == itEnd)
     {
         return ParseIntFromStringError::NoDigitsFound;
     }
@@ -51,7 +52,7 @@ template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> st
     constexpr T MIN_VALUE = std::numeric_limits<T>::min();
 
     T result = 0;
-    for (; it != str.end(); it++)
+    for (; it != itEnd; ++it)
     {
         if (*it < '0' || *it > '9')
         {
