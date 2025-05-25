@@ -1,8 +1,8 @@
 #ifndef SLICE_H
 #define SLICE_H
 
-// #include "array.h"
 #include "defines.h"
+#include "list.h"
 #include "memory.h"
 #include "types.h"
 #include <algorithm>
@@ -13,6 +13,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <type_traits>
+#include <iostream>
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {
@@ -215,6 +216,43 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return -1;
     }
 
+    [[nodiscard]] constexpr i64 linear_search(Slice<value_type> needle) const
+    {
+        if (needle.empty() || needle.len() > len())
+        {
+            return -1;
+        }
+        size_type max_len = len() - needle.len();
+        for (size_type i = 0; i < max_len; i++)
+        {
+            auto sub = slice(i, needle.len());
+            if (sub.equal(needle))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    [[nodiscard]] constexpr i64 linear_search_any_of(Slice<value_type> s) const
+    {
+        if (s.empty())
+        {
+            return -1;
+        }
+        for (size_type i = 0; i < len(); i++)
+        {
+            for (auto it = s.begin(), itEnd = s.end(); it != itEnd; ++it)
+            {
+                if (m_ptr[i] == *it)
+                {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
     constexpr bool contains(const_reference v) const { return linear_search(v) != -1; }
 
     constexpr bool contains(const_reference v, PredicateType&& predicate) const
@@ -222,21 +260,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return linear_search(v, std::forward<PredicateType>(predicate)) != -1;
     }
 
-    constexpr bool contains(Slice<value_type> needle) const
-    {
-        if (needle.len() > len())
-        {
-            return false;
-        }
-        for (size_type i = 0; i < len() - needle.len(); i++)
-        {
-            if (slice(i, needle.len()).equal(needle))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    constexpr bool contains(Slice<value_type> needle) const { return linear_search(needle) != -1; }
 
     void zero()
     {
@@ -398,6 +422,83 @@ template <SliceValueTypeConcept ValueType> struct Slice
         rhs = slice_from_unchecked(mid);
     }
 
+    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split(Allocator* allocator, value_type c) const
+    {
+        SinglyLinkedList<Slice<value_type>> res{allocator};
+        for (u64 pos = 0; pos < len();)
+        {
+            Slice<value_type> rem{cast(value_type*) m_ptr + pos, len() - pos};
+            i64               index = rem.linear_search(c);
+            if (index == -1)
+            {
+                res.push_back(rem);
+                break;
+            }
+            else
+            {
+                auto s = rem.take(index);
+                res.push_back(s);
+                pos += index + 1;
+            }
+        }
+        return res;
+    }
+
+    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split(Allocator* allocator, Slice<value_type> needle) const
+    {
+        SinglyLinkedList<Slice<value_type>> res{allocator};
+        for (u64 pos = 0; pos < len();)
+        {
+            Slice<value_type> rem{cast(value_type*) m_ptr + pos, len() - pos};
+            i64               index = rem.linear_search(needle);
+            if (index == -1)
+            {
+                res.push_back(rem);
+                break;
+            }
+            else
+            {
+                auto s = rem.take(index);
+                res.push_back(s);
+                pos += index + needle.len();
+            }
+        }
+        return res;
+    }
+
+    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split_by_any_of(Allocator* allocator, Slice<value_type> s) const
+    {
+        SinglyLinkedList<Slice<value_type>> res{allocator};
+        for (u64 pos = 0; pos < len();)
+        {
+            Slice<value_type> rem{cast(value_type*) m_ptr + pos, len() - pos};
+            i64               index = rem.linear_search_any_of(s);
+            if (index == -1)
+            {
+                if (rem.not_empty())
+                {
+                    res.push_back(rem);
+                }
+                break;
+            }
+            else
+            {
+                auto s1 = rem.take(index);
+                if (s1.not_empty())
+                {
+                    res.push_back(s1);
+                }
+                pos += index + 1;
+            }
+        }
+        return res;
+    }
+
+    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split_lines(Allocator* allocator) const
+    {
+        return split_by_any_of(allocator, "\r\n");
+    }
+
     constexpr Slice<value_type> trim_left(Slice<value_type> trimmed_elements) const
     {
         size_type i = 0;
@@ -438,5 +539,23 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return *this;
     }
 };
+
+inline std::ostream& operator<<(std::ostream& os, Slice<const char> str)
+{
+    if (str.len() > 0)
+    {
+        os.write(cast(const char*)(str.begin()), str.len());
+    }
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, Slice<u8> str)
+{
+    if (str.len() > 0)
+    {
+        os.write(cast(const char*)(str.begin()), str.len());
+    }
+    return os;
+}
 
 #endif

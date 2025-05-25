@@ -521,28 +521,6 @@ struct String
     [[nodiscard]] String            trim_bytes(Allocator* allocator, String trimmed_chars) const { return String::from_raw(allocator, m_data.view().trim(trimmed_chars.m_data.view())); }
     // clang-format on
 
-    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split_view(Allocator* allocator, value_type c) const
-    {
-        SinglyLinkedList<Slice<value_type>> res{allocator};
-        for (u64 pos = 0, len = len_bytes(); pos < len;)
-        {
-            Slice<value_type> rem{cast(value_type*) m_data.data() + pos, len - pos};
-            i64               index = rem.linear_search(c);
-            if (index == -1)
-            {
-                res.push_back(rem);
-                break;
-            }
-            else
-            {
-                auto s = rem.take(index);
-                res.push_back(s);
-                pos += index + 1;
-            }
-        }
-        return res;
-    }
-
     [[nodiscard]] SinglyLinkedList<String> split_owning(Allocator* allocator, value_type c) const
     {
         SinglyLinkedList<String> res{allocator};

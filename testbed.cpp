@@ -29,10 +29,20 @@ int main()
     // }
     // {
 
+    // {
+    //     MeasureTimeMicro("string split");
+    //     auto str = String::from_raw(allocator, "hellope someone out there");
+    //     auto parts = str.split_owning(allocator, ' ');
+    //     for(auto it = parts.begin(), itEnd = parts.end(); it != itEnd; ++it)
+    //     {
+    //         std::cout << *it << '\n';
+    //     }
+    // }
+
     {
-        MeasureTimeMicro("string split");
-        auto str = String::from_raw(allocator, "hellope someone out there");
-        auto parts = str.split_owning(allocator, ' ');
+        MeasureTimeMicro("string slice split");
+        Slice<const char> str{"hellope\nsomeone\r\nout\nthere\r\n"};
+        auto parts = str.split_lines(allocator);
         for(auto it = parts.begin(), itEnd = parts.end(); it != itEnd; ++it)
         {
             std::cout << *it << '\n';
