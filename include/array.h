@@ -3,6 +3,7 @@
 
 #include "memory.h"
 #include "slice.h"
+#include "types.h"
 #include <type_traits>
 #include <utility>
 
@@ -55,7 +56,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     using pointer         = value_type*;
     using const_pointer   = const value_type*;
     using reference       = value_type&;
-    using const_reference = std::conditional_t<std::is_trivially_copyable_v<value_type>, value_type, const value_type&>;
+    using const_reference = std::conditional_t<TrivialSmall<value_type>, value_type, const value_type&>;
 
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -64,10 +65,10 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     using iterator          = pointer;
     using const_iterator    = const_pointer;
 
-    Allocator* m_allocator{nullptr};
-    ValueType* m_ptr{nullptr};
-    size_type  m_len{0};
-    size_type  m_capacity{0};
+    Allocator*  m_allocator{nullptr};
+    value_type* m_ptr{nullptr};
+    size_type   m_len{0};
+    size_type   m_capacity{0};
 
     Array() = default;
 
@@ -113,7 +114,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     constexpr Array(Array&& other) noexcept
         : m_allocator(std::exchange(other.m_allocator, nullptr))
-        , m_ptr(std::exchange(m_ptr, nullptr))
+        , m_ptr(std::exchange(other.m_ptr, nullptr))
         , m_len(std::exchange(other.m_len, 0))
         , m_capacity(std::exchange(other.m_capacity, 0))
     {
@@ -121,35 +122,43 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     constexpr Array& operator=(Array&& other) noexcept
     {
-        free_allocated_memory();
-        m_allocator = std::exchange(other.m_allocator, nullptr);
-        m_ptr       = std::exchange(other.m_ptr, nullptr);
-        m_len       = std::exchange(other.m_len, 0);
-        m_capacity  = std::exchange(other.m_capacity, 0);
+        if (this != &other)
+        {
+            free_allocated_memory();
+            m_allocator = std::exchange(other.m_allocator, nullptr);
+            m_ptr       = std::exchange(other.m_ptr, nullptr);
+            m_len       = std::exchange(other.m_len, 0);
+            m_capacity  = std::exchange(other.m_capacity, 0);
+        }
         return *this;
     }
 
     Array(const Array&)                  = delete;
     Array& operator=(const Array& other) = delete;
 
-    reference       operator[](size_type i) { return m_ptr[i]; }
+    // clang-format off
+    reference       operator[](size_type i)       { return m_ptr[i]; }
     const_reference operator[](size_type i) const { return m_ptr[i]; }
 
-    reference       front() { return m_ptr[0]; }
-    const_reference front() const { return m_ptr[0]; }
-    reference       back() { return m_ptr[len() - 1]; }
-    const_reference back() const { return m_ptr[len() - 1]; }
+    constexpr size_type len()       const { return m_len; }
+    constexpr bool      empty()     const { return m_len == 0; }
+    constexpr bool      not_empty() const { return m_len > 0; }
 
-    constexpr pointer       data() { return m_ptr; }
+    reference       front()       { Assert(not_empty()); return m_ptr[0]; }
+    const_reference front() const { Assert(not_empty()); return m_ptr[0]; }
+    reference       back()        { Assert(not_empty()); return m_ptr[len() - 1]; }
+    const_reference back()  const { Assert(not_empty()); return m_ptr[len() - 1]; }
+
+    constexpr pointer       data()       { return m_ptr; }
     constexpr const_pointer data() const { return m_ptr; }
-    constexpr size_type     len() const { return m_len; }
 
-    iterator       begin() { return m_ptr; }
-    iterator       end() { return m_ptr + m_len; }
-    const_iterator begin() const { return m_ptr; }
-    const_iterator end() const { return m_ptr + m_len; }
+    iterator       begin()        { return m_ptr; }
+    iterator       end()          { return m_ptr + m_len; }
+    const_iterator begin()  const { return m_ptr; }
+    const_iterator end()    const { return m_ptr + m_len; }
     const_iterator cbegin() const { return m_ptr; }
-    const_iterator cend() const { return m_ptr + m_len; }
+    const_iterator cend()   const { return m_ptr + m_len; }
+    // clang-format on
 
     constexpr Slice<value_type> view() const { return Slice(m_ptr, m_len); }
 
@@ -172,7 +181,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     }
 
     void append(value_type&& value)
-        requires(!std::is_trivially_copyable_v<value_type>)
+        requires(!TrivialSmall<value_type>)
     {
         check_reserve();
         m_ptr[m_len] = std::forward<value_type>(value);
@@ -189,8 +198,22 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         return m_ptr[m_len];
     }
 
+    // void append_many(Slice<value_type>&& elements)
+    //     requires(!std::is_trivially_copyable_v<value_type> && std::is_move_assignable_v<value_type>)
+    // {
+    //     if (!elements.empty())
+    //     {
+    //         check_reserve(elements.len());
+    //         for (size_type i = 0; i < elements.len(); i++)
+    //         {
+    //             m_ptr[m_len] = std::move(elements[i]);
+    //             m_len++;
+    //         }
+    //     }
+    // }
+
     void append_many(Slice<value_type> elements)
-        requires(!std::is_trivially_copyable_v<value_type>)
+        requires(!TrivialSmall<value_type> && std::is_copy_assignable_v<value_type>)
     {
         if (!elements.empty())
         {
@@ -204,14 +227,48 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     }
 
     void append_many(Slice<value_type> elements)
-        requires(std::is_trivially_copyable_v<value_type>)
+        requires(TrivialSmall<value_type>)
     {
         if (!elements.empty())
         {
             check_reserve(elements.len());
-            std::memcpy(m_ptr[m_len], elements.data(), elements.len());
+            std::memcpy(&m_ptr[m_len], elements.data(), elements.len());
             m_len += elements.len();
         }
+    }
+
+    void remove_unordered(size_type i)
+        requires(TrivialSmall<value_type>)
+    {
+        Assert(i < m_len);
+        if (m_len > 1 && i < m_len - 1)
+        {
+            m_ptr[i] = m_ptr[m_len - 1];
+        }
+        --m_len;
+    }
+
+    void remove_unordered(size_type i)
+        requires(!TrivialSmall<value_type> && std::is_move_assignable_v<value_type>)
+    {
+        Assert(i < m_len);
+        if (m_len > 1 && i < m_len - 1)
+        {
+            m_ptr[i] = std::move(m_ptr[m_len - 1]);
+        }
+        --m_len;
+    }
+
+    void remove_unordered(size_type i)
+        requires(!TrivialSmall<value_type> && std::is_copy_assignable_v<value_type> &&
+                 !std::is_move_assignable_v<value_type>)
+    {
+        Assert(i < m_len);
+        if (m_len > 1 && i < m_len - 1)
+        {
+            m_ptr[i] = m_ptr[m_len - 1];
+        }
+        --m_len;
     }
 
     void reset_length() { m_len = 0; }
@@ -228,48 +285,59 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
         m_allocator = nullptr;
     }
 
-    
+    // [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, const_reference sep) const
+    // {
+    //     size_type number_parts = 1;
+    //     for (size_type pos = 0; pos < len();)
+    //     {
+    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
+    //         i64               index = rem.linear_search(sep);
+    //         if (index == -1)
+    //         {
+    //             break;
+    //         }
+    //         pos += index + 1;
+    //         number_parts += 1;
+    //     }
 
-    [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, const_reference sep) const
-    {
-        Array<Slice<value_type>> res{allocator, 2};
-        for (u64 pos = 0; pos < len();)
-        {
-            Slice<value_type> rem{m_ptr + pos, len() - pos};
-            i64               index = rem.linear_search(sep);
-            if (index == -1)
-            {
-                res.append(rem.slice_from(pos));
-                break;
-            }
-            else
-            {
-                res.append(rem.slice(pos, index + 1));
-                pos += index + 1;
-            }
-        }
-        return res;
-    }
+    //     Array<Slice<value_type>> res{allocator, number_parts};
+    //     for (u64 pos = 0; pos < len();)
+    //     {
+    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
+    //         i64               index = rem.linear_search(sep);
+    //         if (index == -1)
+    //         {
+    //             res.append(rem.slice_from(pos));
+    //             break;
+    //         }
+    //         else
+    //         {
+    //             res.append(rem.slice(pos, index + 1));
+    //             pos += index + 1;
+    //         }
+    //     }
+    //     return res;
+    // }
 
-    [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep) const
-    {
-        Array<Slice<value_type>> res{allocator, 1};
-        if (len() <= sep.len())
-        {
-            res.append(*this);
-            return res;
-        }
-        for (u64 pos = 0; pos < len() - sep.len(); pos++)
-        {
-            Slice<value_type> rem{m_ptr + pos, len() - pos};
-            if (rem.starts_with(sep))
-            {
-                res.append(rem.slice_to(sep.len()));
-                pos += sep.len();
-            }
-        }
-        return res;
-    }
+    // [[nodiscard]] Array<Slice<value_type>> split(Allocator* allocator, Slice<value_type> sep) const
+    // {
+    //     Array<Slice<value_type>> res{allocator, 1};
+    //     if (len() <= sep.len())
+    //     {
+    //         res.append(*this);
+    //         return res;
+    //     }
+    //     for (u64 pos = 0; pos < len() - sep.len(); pos++)
+    //     {
+    //         Slice<value_type> rem{m_ptr + pos, len() - pos};
+    //         if (rem.starts_with(sep))
+    //         {
+    //             res.append(rem.slice_to(sep.len()));
+    //             pos += sep.len();
+    //         }
+    //     }
+    //     return res;
+    // }
 };
 
 #endif

@@ -4,6 +4,7 @@
 // #include "array.h"
 #include "defines.h"
 #include "memory.h"
+#include "types.h"
 #include <algorithm>
 #include <compare>
 #include <concepts>
@@ -34,7 +35,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     using pointer         = value_type*;
     using const_pointer   = const value_type*;
     using reference       = value_type&;
-    using const_reference = std::conditional_t<std::is_trivially_copyable_v<value_type>, value_type, const value_type&>;
+    using const_reference = std::conditional_t<TrivialSmall<value_type>, value_type, const value_type&>;
 
     using iterator_category = std::contiguous_iterator_tag;
     using iterator          = pointer;
@@ -157,8 +158,8 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     // clang-format off
     [[nodiscard]] reference       operator[](size_type i) { return m_ptr[i]; }
-    [[nodiscard]] const_reference operator[](size_type i) const requires(!std::is_trivially_copyable_v<value_type>) { return m_ptr[i]; }
-    [[nodiscard]] value_type      operator[](size_type i) const requires( std::is_trivially_copyable_v<value_type>) { return m_ptr[i]; }
+    [[nodiscard]] const_reference operator[](size_type i) const requires(!TrivialSmall<value_type>) { return m_ptr[i]; }
+    [[nodiscard]] value_type      operator[](size_type i) const requires( TrivialSmall<value_type>) { return m_ptr[i]; }
 
     [[nodiscard]] iterator       begin()        { return m_ptr; }
     [[nodiscard]] iterator       end()          { return m_ptr + len(); }
@@ -174,17 +175,17 @@ template <SliceValueTypeConcept ValueType> struct Slice
     [[nodiscard]] std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator<const_iterator>(cend()); }
     [[nodiscard]] std::reverse_iterator<const_iterator> crend()   const { return std::reverse_iterator<const_iterator>(cbegin()); }
 
-    [[nodiscard]] reference       front()       { return m_ptr[0]; }
-    [[nodiscard]] const_reference front() const { return m_ptr[0]; }
+    [[nodiscard]] reference       front()       { Assert(not_empty()); return m_ptr[0]; }
+    [[nodiscard]] const_reference front() const { Assert(not_empty()); return m_ptr[0]; }
 
-    [[nodiscard]] reference       first()       { return m_ptr[0]; }
-    [[nodiscard]] const_reference first() const { return m_ptr[0]; }
+    [[nodiscard]] reference       first()       { Assert(not_empty()); return m_ptr[0]; }
+    [[nodiscard]] const_reference first() const { Assert(not_empty()); return m_ptr[0]; }
 
-    [[nodiscard]] reference       back()       { return m_ptr[len() - 1]; }
-    [[nodiscard]] const_reference back() const { return m_ptr[len() - 1]; }
+    [[nodiscard]] reference       back()       { Assert(not_empty()); return m_ptr[len() - 1]; }
+    [[nodiscard]] const_reference back() const { Assert(not_empty()); return m_ptr[len() - 1]; }
 
-    [[nodiscard]] reference       last()       { return m_ptr[len() - 1]; }
-    [[nodiscard]] const_reference last() const { return m_ptr[len() - 1]; }
+    [[nodiscard]] reference       last()       { Assert(not_empty()); return m_ptr[len() - 1]; }
+    [[nodiscard]] const_reference last() const { Assert(not_empty()); return m_ptr[len() - 1]; }
     // clang-format on
 
     constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }

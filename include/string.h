@@ -2,6 +2,7 @@
 #define STRING_H
 
 #include "array.h"
+#include "list.h"
 #include "memory.h"
 #include <cstddef>
 #include <iterator>
@@ -364,10 +365,14 @@ struct String
     Array<value_type> m_data{};
 
   public:
-    String(Slice<value_type> bytes)
-        : m_data(bytes)
-    {
-    }
+    // String(Slice<value_type> bytes)
+    //     : m_data(bytes)
+    // {
+    // }
+    // String(Slice<const char> bytes)
+    //     : m_data(bytes.reinterpret_elements_as<u8>())
+    // {
+    // }
 
     String() = default;
 
@@ -489,28 +494,76 @@ struct String
     const Array<value_type>& data() const { return m_data; }
     const Slice<value_type>  view() const { return m_data.view(); }
 
-    String substring_bytes(size_type from, size_type to) const { return String(m_data.view().slice(from, to)); }
-    String substring_from_bytes(size_type from) const { return String(m_data.view().slice_from(from)); }
-    String substring_to_bytes(size_type to) const { return String(m_data.view().slice_to(to)); }
+    Slice<value_type> substring_bytes(size_type from, size_type to) const { return m_data.view().slice(from, to); }
+    Slice<value_type> substring_from_bytes(size_type from) const { return m_data.view().slice_from(from); }
+    Slice<value_type> substring_to_bytes(size_type to) const { return m_data.view().slice_to(to); }
+    // clang-format off
+    String substring_bytes(Allocator* allocator, size_type from, size_type to) const { return String::from_raw(allocator, m_data.view().slice(from, to)); }
+    String substring_from_bytes(Allocator* allocator, size_type from) const { return String::from_raw(allocator, m_data.view().slice_from(from)); }
+    String substring_to_bytes(Allocator* allocator, size_type to) const { return String::from_raw(allocator, m_data.view().slice_to(to)); }
+    // clang-format on
 
     bool contains_bytes(const String& needle) const { return m_data.view().contains(needle.m_data.view()); }
     bool starts_with_bytes(const String& needle) const { return m_data.view().starts_with(needle.m_data.view()); }
     bool ends_with_bytes(const String& needle) const { return m_data.view().ends_with(needle.m_data.view()); }
 
-    String trim_spaces() const
-    {
-        auto space_chars = Slice<const char>(" \t\n\r").reinterpret_elements_as<u8>();
-        return m_data.view().trim_left(space_chars).trim_right(space_chars);
-    }
-    String trim_left_bytes(String trimmed_chars) const { return m_data.view().trim_left(trimmed_chars.m_data.view()); }
-    String trim_right_bytes(String trimmed_chars) const
-    {
-        return m_data.view().trim_right(trimmed_chars.m_data.view());
-    }
-    String trim_bytes(String trimmed_chars) const { return m_data.view().trim(trimmed_chars.m_data.view()); }
+    // clang-format off
+    [[nodiscard]] Slice<value_type> trim_spaces() const { auto space_chars = Slice<const char>(" \t\n\r").reinterpret_elements_as<u8>(); return m_data.view().trim_left(space_chars).trim_right(space_chars); }
+    [[nodiscard]] String            trim_spaces(Allocator* allocator) const { auto space_chars = Slice<const char>(" \t\n\r").reinterpret_elements_as<u8>(); return String::from_raw(allocator, m_data.view().trim_left(space_chars).trim_right(space_chars)); }
 
-    Array<String> split(Allocator* allocator, value_type c) const {
-        return m_data.split(allocator, c);
+    [[nodiscard]] Slice<value_type> trim_left_bytes(String trimmed_chars) const { return m_data.view().trim_left(trimmed_chars.m_data.view()); }
+    [[nodiscard]] String            trim_left_bytes(Allocator* allocator, String trimmed_chars) const { return String::from_raw(allocator, m_data.view().trim_left(trimmed_chars.m_data.view())); }
+
+    [[nodiscard]] Slice<value_type> trim_right_bytes(String trimmed_chars) const { return m_data.view().trim_right(trimmed_chars.m_data.view()); }
+    [[nodiscard]] String            trim_right_bytes(Allocator* allocator, String trimmed_chars) const { return String::from_raw(allocator, m_data.view().trim_right(trimmed_chars.m_data.view())); }
+
+    [[nodiscard]] Slice<value_type> trim_bytes(String trimmed_chars) const { return m_data.view().trim(trimmed_chars.m_data.view()); }
+    [[nodiscard]] String            trim_bytes(Allocator* allocator, String trimmed_chars) const { return String::from_raw(allocator, m_data.view().trim(trimmed_chars.m_data.view())); }
+    // clang-format on
+
+    [[nodiscard]] SinglyLinkedList<Slice<value_type>> split_view(Allocator* allocator, value_type c) const
+    {
+        SinglyLinkedList<Slice<value_type>> res{allocator};
+        for (u64 pos = 0, len = len_bytes(); pos < len;)
+        {
+            Slice<value_type> rem{cast(value_type*) m_data.data() + pos, len - pos};
+            i64               index = rem.linear_search(c);
+            if (index == -1)
+            {
+                res.push_back(rem);
+                break;
+            }
+            else
+            {
+                auto s = rem.take(index);
+                res.push_back(s);
+                pos += index + 1;
+            }
+        }
+        return res;
+    }
+
+    [[nodiscard]] SinglyLinkedList<String> split_owning(Allocator* allocator, value_type c) const
+    {
+        SinglyLinkedList<String> res{allocator};
+        for (u64 pos = 0, len = len_bytes(); pos < len;)
+        {
+            Slice<value_type> rem{cast(value_type*) m_data.data() + pos, len - pos};
+            i64               index = rem.linear_search(c);
+            if (index == -1)
+            {
+                auto s = String::from_raw(allocator, rem);
+                res.push_back(std::move(s));
+                break;
+            }
+            else
+            {
+                auto s = String::from_raw(allocator, rem.take(index));
+                res.push_back(std::move(s));
+                pos += index + 1;
+            }
+        }
+        return res;
     }
 
     // iterators

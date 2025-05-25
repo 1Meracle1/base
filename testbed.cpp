@@ -22,61 +22,52 @@ int main()
     auto diff = time_diff_micro(start, time_now());
     std::cout << "arena allocation took " << diff << " micros\n";
 
+    // Array<int> arr{allocator, 10};
+    // for (u64 i = 0; i < 10; ++i)
     // {
-    //     String str    = String::from_raw(allocator, "-12345");
-    //     i64    number = 0;
-    //     Assert(parse_int(str, number) == ParseIntFromStringError::None);
-    //     Assert(number == -12345);
+    //     arr.append(i);
     // }
+    // {
 
+    {
+        MeasureTimeMicro("string split");
+        auto str = String::from_raw(allocator, "hellope someone out there");
+        auto parts = str.split_owning(allocator, ' ');
+        for(auto it = parts.begin(), itEnd = parts.end(); it != itEnd; ++it)
+        {
+            std::cout << *it << '\n';
+        }
+    }
     // {
-    //     String str    = String::from_raw(allocator, "-12345");
-    //     u64    number = 0;
-    //     Assert(parse_int(str, number) == ParseIntFromStringError::UnexpectedNegativeSign);
+    //     MeasureTimeMicro("parsing of negative float with fractional part");
+    //     Slice<const char> cstr   = "-1.234";
+    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
+    //     f64               number = 0;
+    //     Assert(parse_float(str, number) == ParseFloatFromStringError::None);
     // }
-
     // {
-    //     String str    = String::from_raw(allocator, "12345");
-    //     u64    number = 0;
-    //     Assert(parse_int(str, number) == ParseIntFromStringError::None);
-    //     Assert(number == 12345);
+    //     MeasureTimeMicro("parsing of positive float with fractional part");
+    //     Slice<const char> cstr   = "1,234";
+    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
+    //     f64               number = 0;
+    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
     // }
-
     // {
-    //     String str    = String::from_raw(allocator, "12345");
-    //     u8    number = 0;
-    //     Assert(parse_int(str, number) == ParseIntFromStringError::Overflow);
+    //     MeasureTimeMicro("parsing of positive float without fractional part");
+    //     Slice<const char> cstr   = "1";
+    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
+    //     f64               number = 0;
+    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
+    //     Assert(number == cast(f64)1.0);
     // }
-    {
-        MeasureTimeMicro("parsing of negative float with fractional part");
-        Slice<const char> cstr   = "-1.234";
-        Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-        f64               number = 0;
-        Assert(parse_float(str, number) == ParseFloatFromStringError::None);
-    }
-    {
-        MeasureTimeMicro("parsing of positive float with fractional part");
-        Slice<const char> cstr   = "1,234";
-        Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-        f64               number = 0;
-        Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-    }
-    {
-        MeasureTimeMicro("parsing of positive float without fractional part");
-        Slice<const char> cstr   = "1";
-        Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-        f64               number = 0;
-        Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-        Assert(number == cast(f64)1.0);
-    }
-    {
-        MeasureTimeMicro("parsing of negative float without fractional part");
-        Slice<const char> cstr   = "-1";
-        Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-        f64               number = 0;
-        Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-        Assert(number == cast(f64)(-1.0));
-    }
+    // {
+    //     MeasureTimeMicro("parsing of negative float without fractional part");
+    //     Slice<const char> cstr   = "-1";
+    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
+    //     f64               number = 0;
+    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
+    //     Assert(number == cast(f64)(-1.0));
+    // }
     // String str = String::from_utf8_lossy(
     //     allocator, "In the quiet twilight, dreams unfold, soft whispers of a story untold.\n"
     //                "ćeść panśtwu\n"
