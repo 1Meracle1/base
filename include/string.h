@@ -461,7 +461,7 @@ struct String
         return str;
     }
 
-    void check_reserve(size_type added_elements_length = 1) { m_data.check_reserve(added_elements_length); }
+    void check_reserve(size_type added_elements_length = 1) { m_data.ensure_reserved(added_elements_length); }
 
     void push(u32 codepoint)
     {
@@ -472,7 +472,7 @@ struct String
         }
         else
         {
-            m_data.check_reserve(4);
+            m_data.ensure_reserved(4);
             Slice<u8> encoded{m_data.end(), 4};
             string_impl::utf8_encode_raw(codepoint, encoded);
         }
@@ -492,6 +492,8 @@ struct String
     bool                     not_empty() const { return !empty(); }
     Array<value_type>&       data() { return m_data; }
     const Array<value_type>& data() const { return m_data; }
+    Array<value_type>&       raw() { return m_data; }
+    const Array<value_type>& raw() const { return m_data; }
     const Slice<value_type>  view() const { return m_data.view(); }
 
     Slice<value_type> substring_bytes(size_type from, size_type to) const { return m_data.view().slice(from, to); }

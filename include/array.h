@@ -151,6 +151,8 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     constexpr pointer       data()       { return m_ptr; }
     constexpr const_pointer data() const { return m_ptr; }
+    constexpr pointer       raw()       { return m_ptr; }
+    constexpr const_pointer raw() const { return m_ptr; }
 
     iterator       begin()        { return m_ptr; }
     iterator       end()          { return m_ptr + m_len; }
@@ -162,7 +164,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     constexpr Slice<value_type> view() const { return Slice(m_ptr, m_len); }
 
-    void check_reserve(size_type added_elements_length = 1)
+    void ensure_reserved(size_type added_elements_length = 1)
     {
         if (m_capacity + added_elements_length >= m_len)
         {
@@ -175,7 +177,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
 
     void append(const_reference value)
     {
-        check_reserve();
+        ensure_reserved();
         m_ptr[m_len] = value;
         m_len++;
     }
@@ -183,7 +185,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     void append(value_type&& value)
         requires(!TrivialSmall<value_type>)
     {
-        check_reserve();
+        ensure_reserved();
         m_ptr[m_len] = std::forward<value_type>(value);
         m_len++;
     }
@@ -194,7 +196,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     // ` ptr->x = 2;
     [[nodiscard]] pointer append()
     {
-        check_reserve();
+        ensure_reserved();
         return m_ptr[m_len];
     }
 
@@ -217,7 +219,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     {
         if (!elements.empty())
         {
-            check_reserve(elements.len());
+            ensure_reserved(elements.len());
             for (size_type i = 0; i < elements.len(); i++)
             {
                 m_ptr[m_len] = elements[i];
@@ -231,7 +233,7 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     {
         if (!elements.empty())
         {
-            check_reserve(elements.len());
+            ensure_reserved(elements.len());
             std::memcpy(&m_ptr[m_len], elements.data(), elements.len());
             m_len += elements.len();
         }
@@ -272,6 +274,18 @@ template <typename ValueType, GrowthFormulaConcept GrowthFormula = GrowthFormula
     }
 
     void reset_length() { m_len = 0; }
+
+    void ensure_length(size_type len)
+    {
+        if (m_len < len)
+        {
+            if (m_capacity < len)
+            {
+                ensure_reserved(len - m_capacity);
+            }
+            m_len = len;
+        }
+    }
 
     void free_allocated_memory()
     {

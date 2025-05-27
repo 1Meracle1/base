@@ -30,6 +30,8 @@ concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType
     { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
 };
 
+#define ByteSliceFromCstr(cstr) Slice<const char>{cstr}.chop_zero_termination().reinterpret_elements_as<u8>()
+
 template <SliceValueTypeConcept ValueType> struct Slice
 {
     using value_type      = ValueType;
@@ -153,9 +155,12 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     [[nodiscard]] constexpr pointer       data() noexcept { return m_ptr; }
     [[nodiscard]] constexpr const_pointer data() const noexcept { return m_ptr; }
-    [[nodiscard]] constexpr size_type     len() const noexcept { return m_len; }
-    [[nodiscard]] constexpr bool          empty() const noexcept { return len() == 0; }
-    [[nodiscard]] constexpr bool          not_empty() const noexcept { return len() > 0; }
+    [[nodiscard]] constexpr pointer       raw() noexcept { return m_ptr; }
+    [[nodiscard]] constexpr const_pointer raw() const noexcept { return m_ptr; }
+
+    [[nodiscard]] constexpr size_type len() const noexcept { return m_len; }
+    [[nodiscard]] constexpr bool      empty() const noexcept { return len() == 0; }
+    [[nodiscard]] constexpr bool      not_empty() const noexcept { return len() > 0; }
 
     // clang-format off
     [[nodiscard]] reference       operator[](size_type i) { return m_ptr[i]; }
@@ -218,14 +223,16 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     [[nodiscard]] constexpr i64 linear_search(Slice<value_type> needle) const
     {
-        if (needle.empty() || needle.len() > len())
+        size_type length     = len();
+        size_type needle_len = needle.len();
+        if (needle_len == 0 || needle_len > length)
         {
             return -1;
         }
-        size_type max_len = len() - needle.len();
-        for (size_type i = 0; i < max_len; i++)
+        size_type max_len = length - needle_len + 1;
+        for (size_type i = 0; i < max_len; ++i)
         {
-            auto sub = slice(i, needle.len());
+            auto sub = slice(i, i + needle_len);
             if (sub.equal(needle))
             {
                 return i;
@@ -268,7 +275,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
             std::memset(m_ptr, 0, len());
     }
 
-    constexpr bool bytes_equal(Slice<value_type> other) const
+    bool bytes_equal(Slice<value_type> other) const
     {
         if (len() != other.len())
             return false;
@@ -276,27 +283,27 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     constexpr bool equal(Slice<value_type> other) const
-        requires(!std::is_trivially_copyable_v<value_type>)
+    // requires(!std::is_trivially_copyable_v<value_type>)
     {
         if (len() != other.len())
             return false;
-        for (size_type i = 0; i < len(); i++)
+        for (size_type i = 0; i < len(); ++i)
             if (m_ptr[i] != other[i])
                 return false;
         return true;
     }
 
-    constexpr bool equal(Slice<value_type> other) const
-        requires(std::is_trivially_copyable_v<value_type>)
-    {
-        return bytes_equal(other);
-    }
+    // constexpr bool equal(Slice<value_type> other) const
+    //     requires(std::is_trivially_copyable_v<value_type>)
+    // {
+    //     return bytes_equal(other);
+    // }
 
     constexpr bool equal(Slice<value_type> other, PredicateType&& predicate) const
     {
         if (len() != other.m_len)
             return false;
-        for (size_type i = 0; i < len(); i++)
+        for (size_type i = 0; i < len(); ++i)
             if (!predicate(m_ptr[i], other[i]))
                 return false;
         return true;

@@ -7,7 +7,10 @@
 #include "include/string.h"
 #include "include/parse.h"
 #include "include/time.h"
+#include "include/filesystem.h"
+#include "include/types.h"
 #include <cstdio>
+#include <ios>
 #include <iostream>
 
 int main()
@@ -39,14 +42,39 @@ int main()
     //     }
     // }
 
+    // {
+    //     MeasureTimeMicro("string slice split");
+    //     Slice<const char> str{"hellope\nsomeone\r\nout\nthere\r\n"};
+    //     auto parts = str.split_lines(allocator);
+    //     for(auto it = parts.begin(), itEnd = parts.end(); it != itEnd; ++it)
+    //     {
+    //         std::cout << *it << '\n';
+    //     }
+    // }
     {
-        MeasureTimeMicro("string slice split");
-        Slice<const char> str{"hellope\nsomeone\r\nout\nthere\r\n"};
-        auto parts = str.split_lines(allocator);
-        for(auto it = parts.begin(), itEnd = parts.end(); it != itEnd; ++it)
+        MeasureTimeMicro("read from file");
+        Slice<u8> data{};
+        bool      ok = read_entire_file(allocator, ByteSliceFromCstr("include/string.h"), data);
+        std::cout << "read successfully? - " << std::boolalpha << ok << ", bytes: " << data.len() << '\n';
+
         {
-            std::cout << *it << '\n';
+            auto      start  = time_now();
+            Slice<u8> needle = ByteSliceFromCstr("operator<<(std::ostream& os, const String& str)");
+            i64       idx    = data.linear_search(needle);
+            auto      diff   = time_diff_micro(start, time_now());
+            std::cout << "index " << idx << " of substring '" << needle << "' took " << diff << " micros\n";
         }
+
+        // {
+        //     MeasureTimeMicro("utf8 string creation");
+        //     auto str = String::from_utf8_lossy(allocator, data);
+        //     // std::cout << str << '\n';
+        // }
+        // {
+        //     MeasureTimeMicro("raw string creation");
+        //     auto str = String::from_raw(allocator, data);
+        //     // std::cout << str << '\n';
+        // }
     }
     // {
     //     MeasureTimeMicro("parsing of negative float with fractional part");
