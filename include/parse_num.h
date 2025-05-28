@@ -1,5 +1,5 @@
-#ifndef PARSE_H
-#define PARSE_H
+#ifndef PARSE_NUM_H
+#define PARSE_NUM_H
 
 #include "string.h"
 #include <charconv>

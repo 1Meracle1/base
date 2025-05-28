@@ -32,6 +32,8 @@ concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType
 
 #define ByteSliceFromCstr(cstr) Slice<const char>{cstr}.chop_zero_termination().reinterpret_elements_as<u8>()
 
+#define ByteSliceFromCstrZeroTerm(cstr) Slice<const char>{cstr}.reinterpret_elements_as<u8>()
+
 template <SliceValueTypeConcept ValueType> struct Slice
 {
     using value_type      = ValueType;
@@ -241,6 +243,27 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return -1;
     }
 
+    // [[nodiscard]] i64 linear_search_simd(Slice<value_type> needle) const
+    // {
+    //     size_type length     = len();
+    //     size_type needle_len = needle.len();
+    //     if (needle_len == 0 || needle_len > length)
+    //     {
+    //         return -1;
+    //     }
+    //     size_type max_len = length - needle_len + 1;
+    //     size_type i = 0;
+    //     for (; i < max_len; ++i)
+    //     {
+    //         auto sub = slice(i, i + needle_len);
+    //         if (sub.equal(needle))
+    //         {
+    //             return i;
+    //         }
+    //     }
+    //     return -1;
+    // }
+
     [[nodiscard]] constexpr i64 linear_search_any_of(Slice<value_type> s) const
     {
         if (s.empty())
@@ -283,7 +306,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     constexpr bool equal(Slice<value_type> other) const
-    // requires(!std::is_trivially_copyable_v<value_type>)
+    requires(!TrivialSmall<value_type>)
     {
         if (len() != other.len())
             return false;
@@ -293,11 +316,11 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return true;
     }
 
-    // constexpr bool equal(Slice<value_type> other) const
-    //     requires(std::is_trivially_copyable_v<value_type>)
-    // {
-    //     return bytes_equal(other);
-    // }
+    constexpr bool equal(Slice<value_type> other) const
+        requires(TrivialSmall<value_type>)
+    {
+        return bytes_equal(other);
+    }
 
     constexpr bool equal(Slice<value_type> other, PredicateType&& predicate) const
     {

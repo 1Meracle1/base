@@ -5,7 +5,7 @@
 #include "include/assert.h"
 #include "include/slice.h"
 #include "include/string.h"
-#include "include/parse.h"
+#include "include/parse_num.h"
 #include "include/time.h"
 #include "include/filesystem.h"
 #include "include/types.h"
@@ -52,18 +52,39 @@ int main()
     //     }
     // }
     {
-        MeasureTimeMicro("read from file");
+        // MeasureTimeMicro("read from file");
         Slice<u8> data{};
         bool      ok = read_entire_file(allocator, ByteSliceFromCstr("include/string.h"), data);
         std::cout << "read successfully? - " << std::boolalpha << ok << ", bytes: " << data.len() << '\n';
+        // {
+        //     auto      start  = time_now();
+        //     Slice<u8> needle = ByteSliceFromCstr("operator<<(std::ostream& os, const String& str)");
+        //     i64       idx    = data.linear_search(needle);
+        //     auto      diff   = time_diff_micro(start, time_now());
+        //     std::cout << "index " << idx << " of substring '" << needle << "' took " << diff << " micros\n";
 
+        MeasureTimeStats stats_utf8_lossy{allocator};
+        for (u64 i = 0; i < 10000; ++i)
         {
-            auto      start  = time_now();
-            Slice<u8> needle = ByteSliceFromCstr("operator<<(std::ostream& os, const String& str)");
-            i64       idx    = data.linear_search(needle);
-            auto      diff   = time_diff_micro(start, time_now());
-            std::cout << "index " << idx << " of substring '" << needle << "' took " << diff << " micros\n";
+            auto start = time_now();
+            auto str   = String::from_utf8_lossy(allocator, data);
+            auto diff  = time_diff_nano(start, time_now());
+            stats_utf8_lossy.append(diff);
         }
+
+        MeasureTimeStats stats_raw{allocator};
+        for (u64 i = 0; i < 10000; ++i)
+        {
+            auto start = time_now();
+            auto str   = String::from_raw(allocator, data);
+            auto diff  = time_diff_nano(start, time_now());
+            stats_raw.append(diff);
+        }
+
+        stats_raw.print_summary_with_reference(
+            ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "), 
+            stats_utf8_lossy
+        );
 
         // {
         //     MeasureTimeMicro("utf8 string creation");

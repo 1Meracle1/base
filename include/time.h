@@ -1,10 +1,14 @@
 #pragma once
 
-#include "parse.h"
+#include "list.h"
+#include "parse_num.h"
 #include "string.h"
+#include "memory.h"
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <iostream>
 #include <ratio>
 #include <string>
 #include <iomanip>
@@ -16,22 +20,22 @@ static inline TimePoint time_now() { return std::chrono::high_resolution_clock::
 
 static inline u64 time_diff_sec(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64) std::chrono::duration<double>(end - start).count();
+    return std::chrono::duration<double>(end - start).count();
 }
 
 static inline u64 time_diff_milli(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64) std::chrono::duration<double, std::milli>(end - start).count();
+    return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 static inline u64 time_diff_micro(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64) std::chrono::duration<double, std::micro>(end - start).count();
+    return std::chrono::duration<double, std::micro>(end - start).count();
 }
 
 static inline u64 time_diff_nano(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64) std::chrono::duration<double, std::nano>(end - start).count();
+    return std::chrono::duration<double, std::nano>(end - start).count();
 }
 
 #define MeasureTime(lambda) auto CONCATENATE(_measure_time_, __COUNTER__) = MeasureTimeScope(lambda)
@@ -60,6 +64,87 @@ struct MeasureTimeScope
 
     TimePoint     start;
     callback_type f;
+};
+
+/*
+    Credits go to https://github.com/edanor/umesimd/blob/master/microbenchmarks/utilities/TimingStatistics.h
+    Example:
+
+    Slice<u8> data{};
+    bool      ok = read_entire_file(allocator, ByteSliceFromCstr("include/string.h"), data);
+    std::cout << "file read successfully? - " << std::boolalpha << ok << ", bytes: " << data.len() << '\n';
+
+    MeasureTimeStats stats_utf8_lossy{allocator};
+    for (u64 i = 0; i < 10000; ++i)
+    {
+        auto start = time_now();
+        auto str   = String::from_utf8_lossy(allocator, data);
+        auto diff  = time_diff_nano(start, time_now());
+        stats_utf8_lossy.append(diff);
+    }
+
+    MeasureTimeStats stats_raw{allocator};
+    for (u64 i = 0; i < 10000; ++i)
+    {
+        auto start = time_now();
+        auto str   = String::from_raw(allocator, data);
+        auto diff  = time_diff_nano(start, time_now());
+        stats_raw.append(diff);
+    }
+
+    stats_raw.print_summary_with_reference(
+        ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "), 
+        stats_utf8_lossy
+    );
+*/
+class MeasureTimeStats
+{
+  private:
+    SinglyLinkedList<u64> m_measurements;
+    f32                   m_average  = 0.0f;
+    f32                   m_variance = 0.0f;
+    u64                   m_count    = 0;
+
+  public:
+    explicit MeasureTimeStats(Allocator* allocator)
+        : m_measurements{allocator}
+    {
+    }
+
+    void append(u64 elapsed)
+    {
+        m_measurements.push_back(elapsed);
+        f32 diff = cast(f32) elapsed - m_average;
+        m_average += diff / (1.0f + cast(f32) m_count);
+        m_variance += diff * (f32(elapsed) - m_average);
+        ++m_count;
+    }
+
+    f32 average() const { return m_average; }
+    f32 std_dev() const { return m_count > 0 ? std::sqrtf(m_variance) / cast(f32) m_count : 0.0f; }
+
+    f32 speedup(f32 reference) const { return reference / m_average; }
+    f32 speedup(const MeasureTimeStats& reference) const
+    {
+        return m_average > 0.0f ? reference.m_average / m_average : 0.0f;
+    }
+
+    f32 confidence90() { return 1.645f * std_dev() / std::sqrtf(cast(f32) m_count); }
+    f32 confidence95() { return 1.96f * std_dev() / std::sqrtf(cast(f32) m_count); }
+
+    void print_all_measurements() const
+    {
+        for (auto it = m_measurements.cbegin(), itEnd = m_measurements.cend(); it != itEnd; ++it)
+        {
+            std::cout << *it << "ns\n";
+        }
+    }
+
+    void print_summary_with_reference(Slice<u8> summary_description, const MeasureTimeStats& reference) const
+    {
+        std::cout << summary_description << average() << "ns, dev: " << std_dev() << "ns (speedup: " << speedup(reference)
+                  << ")\n";
+    }
 };
 
 static inline String
