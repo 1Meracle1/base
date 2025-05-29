@@ -17,7 +17,6 @@ template <typename F> struct ScopeExit
     F f;
 };
 
-// runs lambda with reference capture of the surrounding scope, at scope exit
 #define defer(lambda) auto CONCATENATE(_defer_, __COUNTER__) = ScopeExit(lambda)
 
 #endif

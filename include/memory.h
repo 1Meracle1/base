@@ -31,7 +31,11 @@ struct HeapAllocator : Allocator
     rawptr alloc_raw(u64 size, u64 alignment) override
     {
         Assert(size > 0 && alignment > 0);
+        #if defined(OS_LINUX)
         rawptr new_ptr = std::aligned_alloc(alignment, size);
+        #elif defined(OS_WINDOWS)
+        rawptr new_ptr = _aligned_malloc(alignment, size);
+        #endif
         Assert(new_ptr != nullptr);
         std::memset(new_ptr, 0, size);
         return new_ptr;
@@ -144,6 +148,172 @@ enum class AllocationError
 
     static u64 os_page_size() { return (u64)getpagesize(); }
 // clang-format on
+#elif defined(OS_WINDOWS)
+static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
+{
+    Assert(size > 0);
+    if (size == 0)
+    {
+        if (err != nullptr)
+        {
+            *err = AllocationError::Invalid_Argument;
+        }
+        return nullptr;
+    }
+
+    LPVOID mapped = VirtualAlloc(
+        ptr,          // Suggested address or NULL
+        (SIZE_T)size, // Size of the region to reserve
+        MEM_RESERVE,  // Allocation type: reserve address space
+        PAGE_NOACCESS // Protection: pages are not accessible
+    );
+
+    if (mapped == NULL)
+    {
+        if (err != nullptr)
+        {
+            DWORD lastError = GetLastError();
+            if (lastError == ERROR_NOT_ENOUGH_MEMORY ||
+                lastError == ERROR_OUTOFMEMORY ||
+                lastError == ERROR_COMMITMENT_LIMIT)
+            {
+                *err = AllocationError::Out_Of_Memory;
+            }
+            else if (lastError == ERROR_INVALID_ADDRESS ||
+                     lastError == ERROR_INVALID_PARAMETER)
+            {
+                *err = AllocationError::Invalid_Argument;
+            }
+            else
+            {
+                *err = AllocationError::Out_Of_Memory; // Fallback
+            }
+        }
+        return nullptr;
+    }
+
+    if (err != nullptr)
+    {
+        *err = AllocationError::None;
+    }
+    return mapped;
+}
+
+static AllocationError os_commit(rawptr data, u64 size)
+{
+    Assert(size > 0);
+    if (data == nullptr)
+    {
+        return AllocationError::Invalid_Pointer;
+    }
+    if (size == 0)
+    {
+        return AllocationError::Invalid_Argument;
+    }
+
+    LPVOID result = VirtualAlloc(
+        data,           // Base address of the region to commit
+        (SIZE_T)size,   // Size of the region to commit
+        MEM_COMMIT,     // Allocation type: commit pages
+        PAGE_READWRITE  // Memory protection: readable and writable
+    );
+
+    if (result == NULL)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_NOT_ENOUGH_MEMORY ||
+            lastError == ERROR_COMMITMENT_LIMIT)
+        {
+            return AllocationError::Out_Of_Memory;
+        }
+        else if (lastError == ERROR_INVALID_ADDRESS)
+        {
+            // e.g., 'data' is not part of a reserved region, or 'size' extends beyond it.
+            return AllocationError::Invalid_Pointer;
+        }
+        // Removed incorrect check for ERROR_ALREADY_COMMITTED here,
+        // as VirtualAlloc would succeed (not return NULL) if memory is already committed.
+        else
+        {
+            return AllocationError::Out_Of_Memory; // Fallback
+        }
+    }
+    return AllocationError::None;
+}
+
+[[maybe_unused]] static AllocationError os_decommit(rawptr data, u64 size)
+{
+    Assert(size > 0);
+    if (data == nullptr)
+    {
+        return AllocationError::Invalid_Pointer;
+    }
+    if (size == 0)
+    {
+        return AllocationError::Invalid_Argument;
+    }
+
+    BOOL success = VirtualFree(
+        data,         // Base address of the region to decommit
+        (SIZE_T)size, // Size of the region to decommit
+        MEM_DECOMMIT  // Operation type: release physical storage
+    );
+
+    if (!success)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_INVALID_ADDRESS)
+        {
+            return AllocationError::Invalid_Pointer;
+        }
+        else
+        {
+            return AllocationError::Out_Of_Memory; // Fallback
+        }
+    }
+    return AllocationError::None;
+}
+
+static AllocationError os_release(rawptr data, u64 size)
+{
+    Assert(size > 0);
+    if (data == nullptr)
+    {
+        return AllocationError::Invalid_Pointer;
+    }
+
+    BOOL success = VirtualFree(
+        data,        // Base address (must be from VirtualAlloc MEM_RESERVE)
+        0,           // Must be 0 when using MEM_RELEASE
+        MEM_RELEASE  // Operation type: release the entire reservation
+    );
+
+    if (!success)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_INVALID_ADDRESS)
+        {
+            return AllocationError::Invalid_Pointer;
+        }
+        else if (lastError == ERROR_INVALID_PARAMETER)
+        {
+            // This would typically happen if dwSize was not 0 with MEM_RELEASE.
+            return AllocationError::Invalid_Argument;
+        }
+        else
+        {
+            return AllocationError::Out_Of_Memory; // Fallback
+        }
+    }
+    return AllocationError::None;
+}
+
+static u64 os_page_size()
+{
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    return (u64)sysInfo.dwPageSize;
+}
 #else
 #error Virtual memory OS allocation interface is not implemented on this platform
 #endif

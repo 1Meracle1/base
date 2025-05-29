@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <concepts>
 
 using i8    = std::int8_t;
 using u8    = std::uint8_t;

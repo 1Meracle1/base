@@ -20,22 +20,22 @@ static inline TimePoint time_now() { return std::chrono::high_resolution_clock::
 
 static inline u64 time_diff_sec(const TimePoint& start, const TimePoint& end)
 {
-    return std::chrono::duration<double>(end - start).count();
+    return cast(u64)std::chrono::duration<double>(end - start).count();
 }
 
 static inline u64 time_diff_milli(const TimePoint& start, const TimePoint& end)
 {
-    return std::chrono::duration<double, std::milli>(end - start).count();
+    return cast(u64)std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 static inline u64 time_diff_micro(const TimePoint& start, const TimePoint& end)
 {
-    return std::chrono::duration<double, std::micro>(end - start).count();
+    return cast(u64)std::chrono::duration<double, std::micro>(end - start).count();
 }
 
 static inline u64 time_diff_nano(const TimePoint& start, const TimePoint& end)
 {
-    return std::chrono::duration<double, std::nano>(end - start).count();
+    return cast(u64)std::chrono::duration<double, std::nano>(end - start).count();
 }
 
 #define MeasureTime(lambda) auto CONCATENATE(_measure_time_, __COUNTER__) = MeasureTimeScope(lambda)
@@ -179,7 +179,7 @@ timestamp_to_rfc3339(Allocator* allocator, const TimePoint& tp, bool output_frac
     {
         result.push(cast(u32) '.');
 
-        written = std::snprintf(buffer, sizeof(buffer), "%06ld", ms);
+        written = std::snprintf(buffer, sizeof(buffer), "%06lld", ms);
         if (written > 0)
         {
             Slice<const char> bytes(buffer, written);

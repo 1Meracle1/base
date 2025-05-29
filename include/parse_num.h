@@ -93,6 +93,14 @@ enum class ParseFloatFromStringError
     Overflow,
 };
 
+/*
+    MeasureTimeMicro("parsing of negative float without fractional part");
+    Slice<const char> cstr   = "-1";
+    Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
+    f64               number = 0;
+    Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
+    Assert(number == cast(f64)(-1.0));
+*/
 template <std::floating_point T>
 static ParseFloatFromStringError parse_float(Slice<u8> str, T& number, u8 separator = '.')
 {

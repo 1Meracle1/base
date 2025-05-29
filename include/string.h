@@ -190,7 +190,7 @@ static constexpr void utf8_encode_raw(u32 codepoint, Slice<u8>& encoded)
     }
 }
 
-static constexpr u32 utf8_decode_first_codepoint(Slice<const u8> bytes, std::size_t& bytes_consumed)
+static u32 utf8_decode_first_codepoint(Slice<const u8> bytes, std::size_t& bytes_consumed)
 {
     Assert(bytes.not_empty());
 
@@ -413,6 +413,17 @@ struct String
         return from_utf8_lossy(allocator, res);
     }
 
+    /*
+    String str = String::from_utf8_lossy(
+        allocator, "In the quiet twilight, dreams unfold, soft whispers of a story untold.\n"
+                   "月明かりが静かに照らし出し、夢を見る心の奥で詩が静かに囁かれる\n"
+                   "Stars collide in the early light of hope, echoing the silent call of the night.\n"
+                   "夜の静寂、希望と孤独が混ざり合うその中で詩が永遠に続く\n");
+    for (u32 codepoint : str)
+    {
+        std::cout << std::hex << codepoint << (codepoint == cast(u32)0xA ? '\n' : ' ');
+    }
+    */
     static String from_utf8_lossy(Allocator* allocator, Slice<value_type> bytes)
     {
         Slice<value_type> valid_bytes;

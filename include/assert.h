@@ -19,6 +19,8 @@
 
 // clang-format off
 #if defined(_WIN32)
+    #define WIN32_LEAN_AND_MEAN
+    #define NOMINMAX
     #include <windows.h>
     #define DEBUG_BREAK() __debugbreak()
     inline bool is_debugger_attached() { return IsDebuggerPresent(); }
