@@ -20,22 +20,22 @@ static inline TimePoint time_now() { return std::chrono::high_resolution_clock::
 
 static inline u64 time_diff_sec(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64)std::chrono::duration<double>(end - start).count();
+    return cast(u64) std::chrono::duration<double>(end - start).count();
 }
 
 static inline u64 time_diff_milli(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64)std::chrono::duration<double, std::milli>(end - start).count();
+    return cast(u64) std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 static inline u64 time_diff_micro(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64)std::chrono::duration<double, std::micro>(end - start).count();
+    return cast(u64) std::chrono::duration<double, std::micro>(end - start).count();
 }
 
 static inline u64 time_diff_nano(const TimePoint& start, const TimePoint& end)
 {
-    return cast(u64)std::chrono::duration<double, std::nano>(end - start).count();
+    return cast(u64) std::chrono::duration<double, std::nano>(end - start).count();
 }
 
 #define MeasureTime(lambda) auto CONCATENATE(_measure_time_, __COUNTER__) = MeasureTimeScope(lambda)
@@ -93,7 +93,7 @@ struct MeasureTimeScope
     }
 
     stats_raw.print_summary_with_reference(
-        ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "), 
+        ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "),
         stats_utf8_lossy
     );
 */
@@ -132,17 +132,67 @@ class MeasureTimeStats
     f32 confidence90() { return 1.645f * std_dev() / std::sqrtf(cast(f32) m_count); }
     f32 confidence95() { return 1.96f * std_dev() / std::sqrtf(cast(f32) m_count); }
 
-    void print_all_measurements() const
+    void print_summary(Slice<u8> summary_description) const
     {
-        for (auto it = m_measurements.cbegin(), itEnd = m_measurements.cend(); it != itEnd; ++it)
-        {
-            std::cout << *it << "ns\n";
-        }
+        std::cout << summary_description << average() << "ns, dev: " << std_dev() << '\n';
     }
 
     void print_summary_with_reference(Slice<u8> summary_description, const MeasureTimeStats& reference) const
     {
-        std::cout << summary_description << average() << "ns, dev: " << std_dev() << "ns (speedup: " << speedup(reference)
+        std::cout << summary_description << average() << "ns, dev: " << std_dev()
+                  << "ns (speedup: " << speedup(reference) << ")\n";
+    }
+};
+
+class MeasureTimeStats2
+{
+  private:
+    u64       m_total    = 0;
+    f32       m_average  = 0.0f;
+    f32       m_variance = 0.0f;
+    u64       m_count    = 0;
+    TimePoint m_start    = {};
+
+  public:
+    void start() { m_start = time_now(); }
+
+    void end()
+    {
+        u64 elapsed = time_diff_nano(m_start, time_now());
+        m_total += elapsed;
+        f32 diff = cast(f32) elapsed - m_average;
+        m_average += diff / (1.0f + cast(f32) m_count);
+        m_variance += diff * (f32(elapsed) - m_average);
+        ++m_count;
+    }
+
+    f32 average() const { return m_average; }
+    f32 std_dev() const { return m_count > 0 ? std::sqrtf(m_variance) / cast(f32) m_count : 0.0f; }
+
+    f32 speedup(f32 reference) const { return reference / m_average; }
+    f32 speedup(const MeasureTimeStats2& reference) const
+    {
+        return m_average > 0.0f ? reference.m_average / m_average : 0.0f;
+    }
+
+    f32 confidence90() { return 1.645f * std_dev() / std::sqrtf(cast(f32) m_count); }
+    f32 confidence95() { return 1.96f * std_dev() / std::sqrtf(cast(f32) m_count); }
+
+    void print_summary(Slice<u8> summary_description) const
+    {
+        std::cout << summary_description << average() << "ns, dev: " << std_dev() << '\n';
+    }
+
+    void print_summary_ms(Slice<u8> summary_description) const
+    {
+        std::cout << summary_description << ", total: " << m_total / 1000 / 1000
+                  << " millis, average: " << average() / 1000 / 1000 << " millis\n";
+    }
+
+    void print_summary_with_reference_ms(Slice<u8> summary_description, const MeasureTimeStats2& reference) const
+    {
+        std::cout << summary_description << ", total: " << m_total / 1000 / 1000
+                  << " millis, average: " << average() / 1000 / 1000 << " millis (speedup:" << speedup(reference)
                   << ")\n";
     }
 };

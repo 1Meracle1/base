@@ -17,17 +17,23 @@
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {
-    { !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T> };
+    {
+        !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T>
+    };
 };
 
 template <typename F, typename ValueType>
 concept SliceElementEqualityPredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    { f(lhs, rhs) } -> std::same_as<bool>;
+    {
+        f(lhs, rhs)
+    } -> std::same_as<bool>;
 };
 
 template <typename F, typename ValueType>
 concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
+    {
+        f(lhs, rhs)
+    } -> std::same_as<std::weak_ordering>;
 };
 
 #define ByteSliceFromCstr(cstr) Slice<const char>{cstr}.chop_zero_termination().reinterpret_elements_as<u8>()
@@ -306,7 +312,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     }
 
     constexpr bool equal(Slice<value_type> other) const
-    requires(!TrivialSmall<value_type>)
+        requires(!TrivialSmall<value_type>)
     {
         if (len() != other.len())
             return false;
@@ -330,6 +336,15 @@ template <SliceValueTypeConcept ValueType> struct Slice
             if (!predicate(m_ptr[i], other[i]))
                 return false;
         return true;
+    }
+
+    bool operator==(Slice<value_type> other) const { return equal(other); }
+
+    constexpr bool starts_with(const_reference v) const
+    {
+        if (empty())
+            return false;
+        return m_ptr[0] == v;
     }
 
     constexpr bool starts_with(Slice<value_type> needle) const
@@ -431,10 +446,10 @@ template <SliceValueTypeConcept ValueType> struct Slice
         }
         else
         {
-            lhs.m_len = index + 1;
+            lhs.m_len = index;
             lhs.m_ptr = m_ptr;
-            rhs.m_len = m_len - lhs.m_len;
-            rhs.m_ptr = m_ptr;
+            rhs.m_len = m_len - index - 1;
+            rhs.m_ptr = m_ptr + index + 1;
         }
     }
 
@@ -526,7 +541,33 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     [[nodiscard]] SinglyLinkedList<Slice<value_type>> split_lines(Allocator* allocator) const
     {
-        return split_by_any_of(allocator, "\r\n");
+        return split_by_any_of(allocator, ByteSliceFromCstr("\r\n"));
+    }
+
+    [[nodiscard]] constexpr Slice<value_type> until(const_reference v) const
+    {
+        size_type i = 0;
+        for (; i < len(); i++)
+        {
+            if (m_ptr[i] == v)
+            {
+                break;
+            }
+        }
+        return slice_to(i);
+    }
+
+    constexpr Slice<value_type> trim_left_not_equal(const_reference v) const
+    {
+        size_type i = 0;
+        for (; i < len(); i++)
+        {
+            if (m_ptr[i] == v)
+            {
+                break;
+            }
+        }
+        return slice_from(i);
     }
 
     constexpr Slice<value_type> trim_left(Slice<value_type> trimmed_elements) const
@@ -542,12 +583,51 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return slice_from(i);
     }
 
+    constexpr Slice<value_type> trim_left(const_reference v) const
+    {
+        size_type i = 0;
+        for (; i < len(); i++)
+        {
+            if (m_ptr[i] != v)
+            {
+                break;
+            }
+        }
+        return slice_from(i);
+    }
+
+    constexpr Slice<value_type> trim_right_not_equal(const_reference v) const
+    {
+        i64 i = m_len - 1;
+        for (; i >= 0; i--)
+        {
+            if (m_ptr[i] == v)
+            {
+                break;
+            }
+        }
+        return slice_to(i);
+    }
+
     constexpr Slice<value_type> trim_right(Slice<value_type> trimmed_elements) const
     {
         i64 i = m_len - 1;
         for (; i >= 0; i--)
         {
             if (trimmed_elements.linear_search(m_ptr[i]) == -1)
+            {
+                break;
+            }
+        }
+        return slice_to(i);
+    }
+
+    constexpr Slice<value_type> trim_right(const_reference v) const
+    {
+        i64 i = m_len - 1;
+        for (; i >= 0; i--)
+        {
+            if (m_ptr[i] != v)
             {
                 break;
             }
@@ -587,5 +667,21 @@ inline std::ostream& operator<<(std::ostream& os, Slice<u8> str)
     }
     return os;
 }
+
+namespace std
+{
+template <> struct hash<Slice<u8>>
+{
+    size_t operator()(Slice<u8> s) const noexcept
+    {
+        size_t seed = 0;
+        for (uint64_t i = 0; i < s.len(); ++i)
+        {
+            seed ^= std::hash<u8>{}(s.m_ptr[i]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+        return seed;
+    }
+};
+} // namespace std
 
 #endif

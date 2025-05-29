@@ -6,6 +6,7 @@
 #include <cmath>
 #include <concepts>
 #include <limits>
+#include <ostream>
 
 enum class ParseIntFromStringError
 {
@@ -17,7 +18,33 @@ enum class ParseIntFromStringError
     Overflow,
 };
 
-template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> str, T& number)
+inline std::ostream& operator<<(std::ostream& os, ParseIntFromStringError e)
+{
+    switch (e)
+    {
+    case ParseIntFromStringError::None:
+        os << "ParseIntFromStringError::None";
+        break;
+    case ParseIntFromStringError::EmptyString:
+        os << "ParseIntFromStringError::EmptyString";
+        break;
+    case ParseIntFromStringError::NoDigitsFound:
+        os << "ParseIntFromStringError::NoDigitsFound";
+        break;
+    case ParseIntFromStringError::UnexpectedNegativeSign:
+        os << "ParseIntFromStringError::UnexpectedNegativeSign";
+        break;
+    case ParseIntFromStringError::UnexpectedNonNumberCharacter:
+        os << "ParseIntFromStringError::UnexpectedNonNumberCharacter";
+        break;
+    case ParseIntFromStringError::Overflow:
+        os << "ParseIntFromStringError::Overflow";
+        break;
+    }
+    return os;
+}
+
+template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> str, T& number, u8 ignore_c = ',')
 {
     if (str.empty())
     {
@@ -54,6 +81,9 @@ template <std::integral T> static ParseIntFromStringError parse_int(Slice<u8> st
     T result = 0;
     for (; it != itEnd; ++it)
     {
+        if (*it == ignore_c)
+            continue;
+
         if (*it < '0' || *it > '9')
         {
             return ParseIntFromStringError::UnexpectedNonNumberCharacter;

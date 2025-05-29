@@ -241,7 +241,7 @@ template <typename T> class SinglyLinkedList
         {
             tail = head;
         }
-        return &head->data;
+        return head->data;
     }
 
     void push_front(const_reference value)
@@ -293,7 +293,7 @@ template <typename T> class SinglyLinkedList
             tail->next = new_node;
             tail       = new_node;
         }
-        return &head->data;
+        return head->data;
     }
 
     void push_back(const_reference value)
