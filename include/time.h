@@ -229,7 +229,11 @@ timestamp_to_rfc3339(Allocator* allocator, const TimePoint& tp, bool output_frac
     {
         result.push(cast(u32) '.');
 
+    #if defined (_MSC_VER)
         written = std::snprintf(buffer, sizeof(buffer), "%06lld", ms);
+    #else
+        written = std::snprintf(buffer, sizeof(buffer), "%06ld", ms);
+    #endif
         if (written > 0)
         {
             Slice<const char> bytes(buffer, written);

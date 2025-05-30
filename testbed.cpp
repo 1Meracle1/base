@@ -9,6 +9,7 @@
 #include "include/time.h"
 #include "include/filesystem.h"
 #include "include/types.h"
+#include "include/vector.h"
 #include <cstdio>
 #include <ios>
 #include <iostream>
@@ -63,28 +64,71 @@ int main()
         //     auto      diff   = time_diff_micro(start, time_now());
         //     std::cout << "index " << idx << " of substring '" << needle << "' took " << diff << " micros\n";
 
-        MeasureTimeStats stats_utf8_lossy{allocator};
-        for (u64 i = 0; i < 10000; ++i)
+        MeasureTimeStats2 stats_vectorized_search;
+        MeasureTimeStats2 stats_seq_search;
+        for (std::size_t iteration = 0; iteration < 10000; ++iteration)
         {
-            auto start = time_now();
-            auto str   = String::from_utf8_lossy(allocator, data);
-            auto diff  = time_diff_nano(start, time_now());
-            stats_utf8_lossy.append(diff);
-        }
+            for (i32 ch = 33; ch < 127; ++ch)
+            {
+                u8 c = cast(u8) ch;
 
-        MeasureTimeStats stats_raw{allocator};
-        for (u64 i = 0; i < 10000; ++i)
-        {
-            auto start = time_now();
-            auto str   = String::from_raw(allocator, data);
-            auto diff  = time_diff_nano(start, time_now());
-            stats_raw.append(diff);
-        }
+                stats_vectorized_search.start();
+                auto maybe_index_vec = firstIndexOfVectorized(data, c);
+                stats_vectorized_search.end();
 
-        stats_raw.print_summary_with_reference(
-            ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "), 
-            stats_utf8_lossy
-        );
+                stats_seq_search.start();
+                auto maybe_index = firstIndexOf(data, c);
+                stats_seq_search.end();
+
+                Assert(maybe_index == maybe_index_vec);
+            }
+        }
+        // for (std::size_t iteration = 0; iteration < 10000; ++iteration)
+        // {
+        //     stats_vectorized_search.start();
+        //     for (i32 ch = 33; ch < 127; ++ch)
+        //     {
+        //         u8   c               = cast(u8) ch;
+        //         auto maybe_index_vec = firstIndexOfVectorized(data, c);
+        //     }
+        //     stats_vectorized_search.end();
+        // }
+        // MeasureTimeStats2 stats_seq_search;
+        // for (std::size_t iteration = 0; iteration < 10000; ++iteration)
+        // {
+        //     stats_seq_search.start();
+        //     for (i32 ch = 33; ch < 127; ++ch)
+        //     {
+        //         u8   c           = cast(u8) ch;
+        //         auto maybe_index = firstIndexOf(data, c);
+        //     }
+        //     stats_seq_search.end();
+        // }
+        stats_vectorized_search.print_summary_with_reference_ms(
+            ByteSliceFromCstr("vectorized search of single character vs sequential search"), stats_seq_search);
+
+        // MeasureTimeStats stats_utf8_lossy{allocator};
+        // for (u64 i = 0; i < 10000; ++i)
+        // {
+        //     auto start = time_now();
+        //     auto str   = String::from_utf8_lossy(allocator, data);
+        //     auto diff  = time_diff_nano(start, time_now());
+        //     stats_utf8_lossy.append(diff);
+        // }
+
+        // MeasureTimeStats stats_raw{allocator};
+        // for (u64 i = 0; i < 10000; ++i)
+        // {
+        //     auto start = time_now();
+        //     auto str   = String::from_raw(allocator, data);
+        //     auto diff  = time_diff_nano(start, time_now());
+        //     stats_raw.append(diff);
+        // }
+
+        // stats_raw.print_summary_with_reference(
+        //     ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "),
+        //     stats_utf8_lossy
+        // );
 
         // {
         //     MeasureTimeMicro("utf8 string creation");
