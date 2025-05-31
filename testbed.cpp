@@ -55,7 +55,7 @@ int main()
     {
         // MeasureTimeMicro("read from file");
         Slice<u8> data{};
-        bool      ok = read_entire_file(allocator, ByteSliceFromCstr("include/string.h"), data);
+        bool      ok = fs::read_entire_file(allocator, ByteSliceFromCstr("include/string.h"), data);
         std::cout << "read successfully? - " << std::boolalpha << ok << ", bytes: " << data.len() << '\n';
         // {
         //     auto      start  = time_now();

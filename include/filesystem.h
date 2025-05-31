@@ -7,7 +7,9 @@
 #include "defer.h"
 #include <fstream>
 
-[[maybe_unused]] [[nodiscard]] static bool write_entire_file(Slice<u8> file_name, Slice<u8> data, bool truncate)
+namespace fs {
+
+[[maybe_unused]] [[nodiscard]] inline bool write_entire_file(Slice<u8> file_name, Slice<u8> data, bool truncate)
 {
     auto open_mode = std::ios::out;
     if (truncate)
@@ -23,7 +25,7 @@
     return !output_file.fail();
 }
 
-[[maybe_unused]] [[nodiscard]] static bool
+[[maybe_unused]] [[nodiscard]] inline bool
 read_entire_file(Allocator* allocator, Slice<u8> file_name, Slice<u8>& res_data)
 {
     std::ifstream input_file{file_name.reinterpret_elements_as<const char>().data(), std::ios::binary | std::ios::ate};
@@ -52,6 +54,8 @@ read_entire_file(Allocator* allocator, Slice<u8> file_name, Slice<u8>& res_data)
         }
     }
     return true;
+}
+
 }
 
 #endif

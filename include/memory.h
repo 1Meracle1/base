@@ -31,11 +31,11 @@ struct HeapAllocator : Allocator
     rawptr alloc_raw(u64 size, u64 alignment) override
     {
         Assert(size > 0 && alignment > 0);
-        #if defined(OS_LINUX)
+#if defined(OS_LINUX)
         rawptr new_ptr = std::aligned_alloc(alignment, size);
-        #elif defined(OS_WINDOWS)
+#elif defined(OS_WINDOWS)
         rawptr new_ptr = _aligned_malloc(alignment, size);
-        #endif
+#endif
         Assert(new_ptr != nullptr);
         std::memset(new_ptr, 0, size);
         return new_ptr;
@@ -67,18 +67,20 @@ enum class AllocationError
 // -----------------------------------------------------------------------------------
 // MARK: Interface with OS
 // -----------------------------------------------------------------------------------
-
 #ifdef OS_LINUX
+
+extern int getpagesize(void);
+extern int madvise(void* __addr, size_t __len, int __advice);
+
+namespace os
+{
 // clang-format off
     #include <sys/mman.h>
     #include <fcntl.h>
     #include <unistd.h>
     #include <errno.h>
 
-    extern int getpagesize(void);
-    extern int madvise(void* __addr, size_t __len, int __advice);
-
-    static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
+    static rawptr reserve(rawptr ptr, u64 size, AllocationError* err)
     {
         Assert(size > 0);
         auto mapped = mmap(ptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -100,7 +102,7 @@ enum class AllocationError
         return mapped;
     }
 
-    static AllocationError os_commit(rawptr data, u64 size)
+    static AllocationError commit(rawptr data, u64 size)
     {
         Assert(size > 0);
         mprotect(data, size, PROT_READ | PROT_WRITE);
@@ -115,7 +117,7 @@ enum class AllocationError
         return AllocationError::None;
     }
 
-    [[maybe_unused]] static AllocationError os_decommit(rawptr data, u64 size)
+    [[maybe_unused]] static AllocationError decommit(rawptr data, u64 size)
     {
         Assert(size > 0);
         int res = mprotect(data, size, PROT_NONE);
@@ -134,7 +136,7 @@ enum class AllocationError
         return AllocationError::None;
     }
 
-    static AllocationError os_release(rawptr data, u64 size) 
+    static AllocationError release(rawptr data, u64 size) 
     { 
         Assert(size > 0);
         int res = munmap(data, size); 
@@ -146,10 +148,13 @@ enum class AllocationError
         return AllocationError::None;
     }
 
-    static u64 os_page_size() { return (u64)getpagesize(); }
+    static u64 page_size() { return (u64)getpagesize(); }
+}
 // clang-format on
 #elif defined(OS_WINDOWS)
-static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
+namespace os
+{
+static rawptr reserve(rawptr ptr, u64 size, AllocationError* err)
 {
     Assert(size > 0);
     if (size == 0)
@@ -161,11 +166,10 @@ static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
         return nullptr;
     }
 
-    LPVOID mapped = VirtualAlloc(
-        ptr,          // Suggested address or NULL
-        (SIZE_T)size, // Size of the region to reserve
-        MEM_RESERVE,  // Allocation type: reserve address space
-        PAGE_NOACCESS // Protection: pages are not accessible
+    LPVOID mapped = VirtualAlloc(ptr,          // Suggested address or NULL
+                                 (SIZE_T)size, // Size of the region to reserve
+                                 MEM_RESERVE,  // Allocation type: reserve address space
+                                 PAGE_NOACCESS // Protection: pages are not accessible
     );
 
     if (mapped == NULL)
@@ -173,14 +177,12 @@ static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
         if (err != nullptr)
         {
             DWORD lastError = GetLastError();
-            if (lastError == ERROR_NOT_ENOUGH_MEMORY ||
-                lastError == ERROR_OUTOFMEMORY ||
+            if (lastError == ERROR_NOT_ENOUGH_MEMORY || lastError == ERROR_OUTOFMEMORY ||
                 lastError == ERROR_COMMITMENT_LIMIT)
             {
                 *err = AllocationError::Out_Of_Memory;
             }
-            else if (lastError == ERROR_INVALID_ADDRESS ||
-                     lastError == ERROR_INVALID_PARAMETER)
+            else if (lastError == ERROR_INVALID_ADDRESS || lastError == ERROR_INVALID_PARAMETER)
             {
                 *err = AllocationError::Invalid_Argument;
             }
@@ -199,7 +201,7 @@ static rawptr os_reserve(rawptr ptr, u64 size, AllocationError* err)
     return mapped;
 }
 
-static AllocationError os_commit(rawptr data, u64 size)
+static AllocationError commit(rawptr data, u64 size)
 {
     Assert(size > 0);
     if (data == nullptr)
@@ -211,18 +213,16 @@ static AllocationError os_commit(rawptr data, u64 size)
         return AllocationError::Invalid_Argument;
     }
 
-    LPVOID result = VirtualAlloc(
-        data,           // Base address of the region to commit
-        (SIZE_T)size,   // Size of the region to commit
-        MEM_COMMIT,     // Allocation type: commit pages
-        PAGE_READWRITE  // Memory protection: readable and writable
+    LPVOID result = VirtualAlloc(data,          // Base address of the region to commit
+                                 (SIZE_T)size,  // Size of the region to commit
+                                 MEM_COMMIT,    // Allocation type: commit pages
+                                 PAGE_READWRITE // Memory protection: readable and writable
     );
 
     if (result == NULL)
     {
         DWORD lastError = GetLastError();
-        if (lastError == ERROR_NOT_ENOUGH_MEMORY ||
-            lastError == ERROR_COMMITMENT_LIMIT)
+        if (lastError == ERROR_NOT_ENOUGH_MEMORY || lastError == ERROR_COMMITMENT_LIMIT)
         {
             return AllocationError::Out_Of_Memory;
         }
@@ -241,7 +241,7 @@ static AllocationError os_commit(rawptr data, u64 size)
     return AllocationError::None;
 }
 
-[[maybe_unused]] static AllocationError os_decommit(rawptr data, u64 size)
+[[maybe_unused]] static AllocationError decommit(rawptr data, u64 size)
 {
     Assert(size > 0);
     if (data == nullptr)
@@ -253,10 +253,9 @@ static AllocationError os_commit(rawptr data, u64 size)
         return AllocationError::Invalid_Argument;
     }
 
-    BOOL success = VirtualFree(
-        data,         // Base address of the region to decommit
-        (SIZE_T)size, // Size of the region to decommit
-        MEM_DECOMMIT  // Operation type: release physical storage
+    BOOL success = VirtualFree(data,         // Base address of the region to decommit
+                               (SIZE_T)size, // Size of the region to decommit
+                               MEM_DECOMMIT  // Operation type: release physical storage
     );
 
     if (!success)
@@ -274,7 +273,7 @@ static AllocationError os_commit(rawptr data, u64 size)
     return AllocationError::None;
 }
 
-static AllocationError os_release(rawptr data, u64 size)
+static AllocationError release(rawptr data, u64 size)
 {
     Assert(size > 0);
     if (data == nullptr)
@@ -282,10 +281,9 @@ static AllocationError os_release(rawptr data, u64 size)
         return AllocationError::Invalid_Pointer;
     }
 
-    BOOL success = VirtualFree(
-        data,        // Base address (must be from VirtualAlloc MEM_RESERVE)
-        0,           // Must be 0 when using MEM_RELEASE
-        MEM_RELEASE  // Operation type: release the entire reservation
+    BOOL success = VirtualFree(data,       // Base address (must be from VirtualAlloc MEM_RESERVE)
+                               0,          // Must be 0 when using MEM_RELEASE
+                               MEM_RELEASE // Operation type: release the entire reservation
     );
 
     if (!success)
@@ -308,12 +306,13 @@ static AllocationError os_release(rawptr data, u64 size)
     return AllocationError::None;
 }
 
-static u64 os_page_size()
+static u64 page_size()
 {
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     return (u64)sysInfo.dwPageSize;
 }
+} // namespace os
 #else
 #error Virtual memory OS allocation interface is not implemented on this platform
 #endif
@@ -353,10 +352,10 @@ struct MemoryBlock
 
         MemoryBlock* mem_block = nullptr;
         auto         err       = AllocationError::None;
-        mem_block              = cast(MemoryBlock*) os_reserve(nullptr, block_size, &err);
+        mem_block              = cast(MemoryBlock*) os::reserve(nullptr, block_size, &err);
         Assert(err == AllocationError::None && mem_block != nullptr);
 
-        err = os_commit(mem_block, commit_size);
+        err = os::commit(mem_block, commit_size);
         Assert(err == AllocationError::None && mem_block != nullptr);
 
         mem_block->m_used        = header_size();
@@ -371,7 +370,7 @@ struct MemoryBlock
         if (mem_block != nullptr)
         {
             auto err = AllocationError::None;
-            err      = os_release(mem_block, mem_block->m_reserved);
+            err      = os::release(mem_block, mem_block->m_reserved);
             Assert(err == AllocationError::None);
         }
     }
@@ -433,7 +432,7 @@ struct MemoryBlock
         if (new_used >= m_committed)
         {
             auto new_committed = align_formula(m_committed + new_used, m_commit_size);
-            auto err           = os_commit(this, new_committed);
+            auto err           = os::commit(this, new_committed);
             Assert(err == AllocationError::None);
             m_committed = new_committed;
         }
@@ -488,7 +487,7 @@ struct VirtualArena : Allocator
         Assert(commit_size > alignment);
         Assert(block_size > commit_size);
 
-        u64 page_size = os_page_size();
+        u64 page_size = os::page_size();
         Assert(is_power_of_two(page_size));
         m_commit_size = align_formula(commit_size, page_size);
         m_block_size  = align_formula(block_size, m_commit_size);
