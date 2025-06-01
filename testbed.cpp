@@ -73,11 +73,12 @@ int main()
                 u8 c = cast(u8) ch;
 
                 stats_vectorized_search.start();
-                auto maybe_index_vec = firstIndexOfVectorized(data, c);
+                // auto maybe_index_vec = _firstIndexOfVectorized<simd::AVXInstructions>(data, c);
+                auto maybe_index = data.linear_search(c);
                 stats_vectorized_search.end();
 
                 stats_seq_search.start();
-                auto maybe_index = firstIndexOf(data, c);
+                auto maybe_index_vec = data.linear_search(c);
                 stats_seq_search.end();
 
                 Assert(maybe_index == maybe_index_vec);

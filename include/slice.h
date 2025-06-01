@@ -1,6 +1,7 @@
 #ifndef SLICE_H
 #define SLICE_H
 
+#include "vector.h"
 #include "defines.h"
 #include "list.h"
 #include "memory.h"
@@ -17,23 +18,17 @@
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {
-    {
-        !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T>
-    };
+    { !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T> };
 };
 
 template <typename F, typename ValueType>
 concept SliceElementEqualityPredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    {
-        f(lhs, rhs)
-    } -> std::same_as<bool>;
+    { f(lhs, rhs) } -> std::same_as<bool>;
 };
 
 template <typename F, typename ValueType>
 concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    {
-        f(lhs, rhs)
-    } -> std::same_as<std::weak_ordering>;
+    { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
 };
 
 #define ByteSliceFromCstr(cstr) Slice<const char>{cstr}.chop_zero_termination().reinterpret_elements_as<u8>()
@@ -79,6 +74,17 @@ template <SliceValueTypeConcept ValueType> struct Slice
     {
     }
 
+    template <typename OtherValueType>
+        requires std::is_convertible_v<OtherValueType (*)[], value_type (*)[]>
+    constexpr Slice(std::span<OtherValueType> s) noexcept
+        : m_ptr(s.data())
+        , m_len(s.size())
+    {
+    }
+
+    constexpr operator std::span<value_type>() noexcept { return {m_ptr, m_len}; }
+    constexpr operator std::span<const value_type>() const noexcept { return {m_ptr, m_len}; }
+
     // implicit constructor for intializer lists;
     // SAFETY: rough maniacs governing c++ standards decided it is a good idea,
     // for initializer_list to have internal temp array and have its address
@@ -89,6 +95,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     // {
     // }
 
+    // alignment of value_type matches it of NewValueType
     template <SliceValueTypeConcept NewValueType>
     [[nodiscard]] constexpr Slice<NewValueType> reinterpret_elements_as() noexcept
     {
@@ -202,13 +209,10 @@ template <SliceValueTypeConcept ValueType> struct Slice
     [[nodiscard]] const_reference last() const { Assert(not_empty()); return m_ptr[len() - 1]; }
     // clang-format on
 
-    constexpr void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
-
-    constexpr void reverse()
+    [[nodiscard]] constexpr i64 linear_search(value_type v) const
+        requires(simd::Scalar<value_type>)
     {
-        size_type half = len() / 2;
-        for (size_type i = 0; i < half; i++)
-            swap(i, len() - i - 1);
+        return simd::first_index_of(m_ptr, m_len, v);
     }
 
     [[nodiscard]] constexpr i64 linear_search(const_reference v) const
@@ -219,9 +223,9 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return -1;
     }
 
-    using PredicateType = std::function<bool(const_reference, const_reference)>;
+    using Predicate = std::function<bool(const_reference, const_reference)>;
 
-    [[nodiscard]] constexpr i64 linear_search(const_reference v, PredicateType&& predicate) const
+    [[nodiscard]] constexpr i64 linear_search(const_reference v, Predicate&& predicate) const
     {
         for (size_type i = 0; i < len(); i++)
             if (predicate(m_ptr[i], v))
@@ -249,27 +253,6 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return -1;
     }
 
-    // [[nodiscard]] i64 linear_search_simd(Slice<value_type> needle) const
-    // {
-    //     size_type length     = len();
-    //     size_type needle_len = needle.len();
-    //     if (needle_len == 0 || needle_len > length)
-    //     {
-    //         return -1;
-    //     }
-    //     size_type max_len = length - needle_len + 1;
-    //     size_type i = 0;
-    //     for (; i < max_len; ++i)
-    //     {
-    //         auto sub = slice(i, i + needle_len);
-    //         if (sub.equal(needle))
-    //         {
-    //             return i;
-    //         }
-    //     }
-    //     return -1;
-    // }
-
     [[nodiscard]] constexpr i64 linear_search_any_of(Slice<value_type> s) const
     {
         if (s.empty())
@@ -278,12 +261,10 @@ template <SliceValueTypeConcept ValueType> struct Slice
         }
         for (size_type i = 0; i < len(); i++)
         {
-            for (auto it = s.begin(), itEnd = s.end(); it != itEnd; ++it)
+            i64 j = s.linear_search(m_ptr[i]);
+            if (j != -1)
             {
-                if (m_ptr[i] == *it)
-                {
-                    return i;
-                }
+                return i;
             }
         }
         return -1;
@@ -291,20 +272,20 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     constexpr bool contains(const_reference v) const { return linear_search(v) != -1; }
 
-    constexpr bool contains(const_reference v, PredicateType&& predicate) const
+    constexpr bool contains(const_reference v, Predicate&& predicate) const
     {
-        return linear_search(v, std::forward<PredicateType>(predicate)) != -1;
+        return linear_search(v, std::forward<Predicate>(predicate)) != -1;
     }
 
     constexpr bool contains(Slice<value_type> needle) const { return linear_search(needle) != -1; }
 
-    void zero()
+    constexpr void zero()
     {
         if (len() > 0)
             std::memset(m_ptr, 0, len());
     }
 
-    bool bytes_equal(Slice<value_type> other) const
+    constexpr bool bytes_equal(Slice<value_type> other) const
     {
         if (len() != other.len())
             return false;
@@ -328,7 +309,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return bytes_equal(other);
     }
 
-    constexpr bool equal(Slice<value_type> other, PredicateType&& predicate) const
+    constexpr bool equal(Slice<value_type> other, Predicate&& predicate) const
     {
         if (len() != other.m_len)
             return false;
@@ -354,11 +335,11 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return equal(slice_to(needle.len()));
     }
 
-    constexpr bool starts_with(Slice<value_type> needle, PredicateType&& predicate) const
+    constexpr bool starts_with(Slice<value_type> needle, Predicate&& predicate) const
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_to(needle.len()), std::forward<PredicateType>(predicate));
+        return equal(slice_to(needle.len()), std::forward<Predicate>(predicate));
     }
 
     constexpr bool ends_with(Slice<value_type> needle) const
@@ -368,14 +349,23 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return equal(slice_from_back(needle.len()));
     }
 
-    constexpr bool ends_with(Slice<value_type> needle, PredicateType&& predicate) const
+    constexpr bool ends_with(Slice<value_type> needle, Predicate&& predicate) const
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_from_back(needle.len()), std::forward<PredicateType>(predicate));
+        return equal(slice_from_back(needle.len()), std::forward<Predicate>(predicate));
     }
 
-    [[nodiscard]] constexpr Slice unique()
+    void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
+
+    void reverse()
+    {
+        size_type half = len() / 2;
+        for (size_type i = 0; i < half; i++)
+            swap(i, len() - i - 1);
+    }
+
+    void unique()
     {
         if (len() < 2)
             return *this;
@@ -409,11 +399,11 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return slice_to(i);
     }
 
-    template <typename F> constexpr ValueType reduce(ValueType initial_value, F&& f) const
+    template <typename F> constexpr ValueType reduce(const_reference initial_value, F&& f) const
     {
         auto res = initial_value;
-        for (size_type j = 1; j < len(); j++)
-            res += f(res, m_ptr[j]);
+        for (size_type j = 0; j < len(); j++)
+            res = f(res, m_ptr[j]);
         return res;
     }
 
@@ -546,27 +536,14 @@ template <SliceValueTypeConcept ValueType> struct Slice
 
     [[nodiscard]] constexpr Slice<value_type> until(const_reference v) const
     {
-        size_type i = 0;
-        for (; i < len(); i++)
-        {
-            if (m_ptr[i] == v)
-            {
-                break;
-            }
-        }
-        return slice_to(i);
+        i64 i = linear_search(v);
+        return i == -1 ? *this : slice_to(i);
     }
 
     constexpr Slice<value_type> trim_left_not_equal(const_reference v) const
     {
-        size_type i = 0;
-        for (; i < len(); i++)
-        {
-            if (m_ptr[i] == v)
-            {
-                break;
-            }
-        }
+        i64 i = linear_search(v);
+        return i == -1 ? *this : slice_from(i);
         return slice_from(i);
     }
 

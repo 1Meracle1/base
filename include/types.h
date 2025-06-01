@@ -25,7 +25,8 @@ using rawptr  = void*;
 #define cast(Type) (Type)
 
 template <typename T>
-concept TrivialSmall = std::is_pod_v<T> && std::is_trivially_destructible_v<T> && sizeof(T) <= 16;
+concept TrivialSmall = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> &&
+                       std::is_trivially_destructible_v<T> && std::is_trivially_destructible_v<T> && sizeof(T) <= 16;
 
 static_assert(TrivialSmall<u64>);
 static_assert(TrivialSmall<cstring>);
