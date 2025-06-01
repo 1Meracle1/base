@@ -9,7 +9,7 @@
 #include "include/time.h"
 #include "include/filesystem.h"
 #include "include/types.h"
-#include "include/vector.h"
+#include "include/simd/vector.h"
 #include <cstdio>
 #include <ios>
 #include <iostream>
@@ -25,6 +25,8 @@ int main()
 
     auto diff = time_diff_micro(start, time_now());
     std::cout << "arena allocation took " << diff << " micros\n";
+
+    std::cout << simd::supported_features() << '\n';
 
     // Array<int> arr{allocator, 10};
     // for (u64 i = 0; i < 10; ++i)
@@ -64,123 +66,40 @@ int main()
         //     auto      diff   = time_diff_micro(start, time_now());
         //     std::cout << "index " << idx << " of substring '" << needle << "' took " << diff << " micros\n";
 
-        MeasureTimeStats2 stats_vectorized_search;
+        auto first_index_of_seq = []<typename T>(const T* ptr, u64 length, T needle) -> i64
+        {
+            if (length == 0)
+                return -1;
+            for (u64 i = 0; i < length; ++i)
+            {
+                if (ptr[i] == needle)
+                    return i;
+            }
+            return -1;
+        };
+
         MeasureTimeStats2 stats_seq_search;
+        MeasureTimeStats2 stats_vectorized_lambda_arguments;
         for (std::size_t iteration = 0; iteration < 10000; ++iteration)
         {
             for (i32 ch = 33; ch < 127; ++ch)
             {
                 u8 c = cast(u8) ch;
 
-                stats_vectorized_search.start();
-                // auto maybe_index_vec = _firstIndexOfVectorized<simd::AVXInstructions>(data, c);
-                auto maybe_index = data.linear_search(c);
-                stats_vectorized_search.end();
-
+                auto maybe_index = first_index_of_seq(data.data(), data.len(), c);
                 stats_seq_search.start();
-                auto maybe_index_vec = data.linear_search(c);
+                maybe_index = first_index_of_seq(data.data(), data.len(), c);
                 stats_seq_search.end();
 
-                Assert(maybe_index == maybe_index_vec);
+                auto maybe_index1 = simd::first_index_of(data.data(), data.len(), c);
+                stats_vectorized_lambda_arguments.start();
+                maybe_index1 = simd::first_index_of(data.data(), data.len(), c);
+                stats_vectorized_lambda_arguments.end();
+
+                Assert(maybe_index == maybe_index1);
             }
         }
-        // for (std::size_t iteration = 0; iteration < 10000; ++iteration)
-        // {
-        //     stats_vectorized_search.start();
-        //     for (i32 ch = 33; ch < 127; ++ch)
-        //     {
-        //         u8   c               = cast(u8) ch;
-        //         auto maybe_index_vec = firstIndexOfVectorized(data, c);
-        //     }
-        //     stats_vectorized_search.end();
-        // }
-        // MeasureTimeStats2 stats_seq_search;
-        // for (std::size_t iteration = 0; iteration < 10000; ++iteration)
-        // {
-        //     stats_seq_search.start();
-        //     for (i32 ch = 33; ch < 127; ++ch)
-        //     {
-        //         u8   c           = cast(u8) ch;
-        //         auto maybe_index = firstIndexOf(data, c);
-        //     }
-        //     stats_seq_search.end();
-        // }
-        stats_vectorized_search.print_summary_with_reference_ms(
-            ByteSliceFromCstr("vectorized search of single character vs sequential search"), stats_seq_search);
-
-        // MeasureTimeStats stats_utf8_lossy{allocator};
-        // for (u64 i = 0; i < 10000; ++i)
-        // {
-        //     auto start = time_now();
-        //     auto str   = String::from_utf8_lossy(allocator, data);
-        //     auto diff  = time_diff_nano(start, time_now());
-        //     stats_utf8_lossy.append(diff);
-        // }
-
-        // MeasureTimeStats stats_raw{allocator};
-        // for (u64 i = 0; i < 10000; ++i)
-        // {
-        //     auto start = time_now();
-        //     auto str   = String::from_raw(allocator, data);
-        //     auto diff  = time_diff_nano(start, time_now());
-        //     stats_raw.append(diff);
-        // }
-
-        // stats_raw.print_summary_with_reference(
-        //     ByteSliceFromCstrZeroTerm("Construction of string from raw bytes vs utf8 lossy: "),
-        //     stats_utf8_lossy
-        // );
-
-        // {
-        //     MeasureTimeMicro("utf8 string creation");
-        //     auto str = String::from_utf8_lossy(allocator, data);
-        //     // std::cout << str << '\n';
-        // }
-        // {
-        //     MeasureTimeMicro("raw string creation");
-        //     auto str = String::from_raw(allocator, data);
-        //     // std::cout << str << '\n';
-        // }
+        stats_vectorized_lambda_arguments.print_summary_with_reference_ms(
+            ByteSliceFromCstr("vectorized search with lambda and arguments"), stats_seq_search);
     }
-    // {
-    //     MeasureTimeMicro("parsing of negative float with fractional part");
-    //     Slice<const char> cstr   = "-1.234";
-    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-    //     f64               number = 0;
-    //     Assert(parse_float(str, number) == ParseFloatFromStringError::None);
-    // }
-    // {
-    //     MeasureTimeMicro("parsing of positive float with fractional part");
-    //     Slice<const char> cstr   = "1,234";
-    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-    //     f64               number = 0;
-    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-    // }
-    // {
-    //     MeasureTimeMicro("parsing of positive float without fractional part");
-    //     Slice<const char> cstr   = "1";
-    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-    //     f64               number = 0;
-    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-    //     Assert(number == cast(f64)1.0);
-    // }
-    // {
-    //     MeasureTimeMicro("parsing of negative float without fractional part");
-    //     Slice<const char> cstr   = "-1";
-    //     Slice<u8>         str    = cstr.chop_zero_termination().reinterpret_elements_as<u8>();
-    //     f64               number = 0;
-    //     Assert(parse_float(str, number, ',') == ParseFloatFromStringError::None);
-    //     Assert(number == cast(f64)(-1.0));
-    // }
-    // String str = String::from_utf8_lossy(
-    //     allocator, "In the quiet twilight, dreams unfold, soft whispers of a story untold.\n"
-    //                "ćeść panśtwu\n"
-    //                "月明かりが静かに照らし出し、夢を見る心の奥で詩が静かに囁かれる\n"
-    //                "Stars collide in the early light of hope, echoing the silent call of the night.\n"
-    //                "夜の静寂、希望と孤独が混ざり合うその中で詩が永遠に続く\n");
-    // for (u32 codepoint : str)
-    // {
-    //     std::cout << std::hex << codepoint << (codepoint == cast(u32)0xA ? '\n' : ' ');
-    // }
-    // std::cout << '\n' << str << '\n';
 }

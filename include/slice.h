@@ -1,7 +1,8 @@
 #ifndef SLICE_H
 #define SLICE_H
 
-#include "vector.h"
+#include "simd/vector.h"
+#include "simd/algorithms.h"
 #include "defines.h"
 #include "list.h"
 #include "memory.h"
@@ -306,7 +307,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
     constexpr bool equal(Slice<value_type> other) const
         requires(TrivialSmall<value_type>)
     {
-        return bytes_equal(other);
+        return simd::equal(m_ptr, m_len, other.m_ptr, other.m_len);
     }
 
     constexpr bool equal(Slice<value_type> other, Predicate&& predicate) const
