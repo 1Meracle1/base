@@ -16,6 +16,7 @@
 #include <iterator>
 #include <type_traits>
 #include <iostream>
+#include <span>
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {

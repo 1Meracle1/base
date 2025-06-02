@@ -73,17 +73,17 @@ concept RegisterTraitRequirement = requires { typename RegisterTrait<T, Tag>::el
 template <typename T, u64 N, typename Tag>
 concept RegisterTraitLengthRequirement = (RegisterTraitRequirement<T, Tag> && RegisterTrait<T, Tag>::length == N);
 
-inline u8 bit_scan_first_set_bit(i32 mask)
+inline u64 bit_scan_first_set_bit(u64 mask)
 {
-    u8 res;
 #if defined(__GNUC__) || defined(__clang__)
-    res = cast(u8) __builtin_ctz(mask);
+    u64 res = cast(u64) __builtin_ctz(mask);
     return res;
 #elif defined(_MSC_VER)
-    _BitScanForward(&res, cast(u64) mask);
-    return res;
+    unsigned long res;
+    _BitScanForward(&res, cast(unsigned long)mask);
+    return cast(u64)res;
 #else
-    u8 count = 0;
+    u64 count = 0;
     while ((mask & 1) == 0)
     {
         mask >>= 1;

@@ -101,18 +101,18 @@ template <> struct RegisterTrait<f32, AVXInstructionSet>
     static constexpr u64 alignment = 32;
 
     // set/load/store
-    static register_type set1(f32 v) { return _mm256_set1_pd(v); }
-    static register_type setzero() { return _mm256_setzero_pd(); }
+    static register_type set1(f32 v) { return _mm256_set1_ps(v); }
+    static register_type setzero() { return _mm256_setzero_ps(); }
     static register_type load_unaligned(const element_type* p) { return _mm256_loadu_ps(p); }
     static void          store_unaligned(element_type* p, register_type v) { _mm256_storeu_ps(p, v); }
     static register_type load_aligned(const element_type* p) { return _mm256_load_ps(p); }
     static void          store_aligned(element_type* p, register_type v) { _mm256_store_ps(p, v); }
 
     // arithmetic
-    static register_type add(register_type a, register_type b) { return _mm256_add_pd(a, b); }
-    static register_type sub(register_type a, register_type b) { return _mm256_sub_pd(a, b); }
-    static register_type mul(register_type a, register_type b) { return _mm256_mul_pd(a, b); }
-    static register_type div(register_type a, register_type b) { return _mm256_div_pd(a, b); }
+    static register_type add(register_type a, register_type b) { return _mm256_add_ps(a, b); }
+    static register_type sub(register_type a, register_type b) { return _mm256_sub_ps(a, b); }
+    static register_type mul(register_type a, register_type b) { return _mm256_mul_ps(a, b); }
+    static register_type div(register_type a, register_type b) { return _mm256_div_ps(a, b); }
 
     static register_type sqrt(register_type a) { return _mm256_sqrt_ps(a); }
     static register_type rsqrt(register_type a)

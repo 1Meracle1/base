@@ -53,6 +53,7 @@ template <typename T> inline bool equal(const T* haystack_ptr, u64 haystack_len,
     auto vectorized = []<typename instruction_set_t>(const T* haystack_ptr, u64 haystack_len, const T* needle_ptr,
                                                      u64 needle_len) -> bool
     {
+        (void)needle_len;
         using Vector           = Vector<u8, instruction_set_t>;
         constexpr u64 v_length = Vector::length;
         u64           pos      = 0;
@@ -74,7 +75,10 @@ template <typename T> inline bool equal(const T* haystack_ptr, u64 haystack_len,
         return true;
     };
     auto scalar = [](const T* haystack_ptr, u64 haystack_len, const T* needle_ptr, u64 needle_len) -> bool
-    { return std::memcmp(haystack_ptr, needle_ptr, haystack_len * sizeof(T)) == 0; };
+    {
+        (void)needle_len;
+        return std::memcmp(haystack_ptr, needle_ptr, haystack_len * sizeof(T)) == 0;
+    };
     return dispatch_instruction_set<T>(haystack_len, vectorized, scalar, haystack_ptr, haystack_len, needle_ptr,
                                        needle_len);
 }
