@@ -9,7 +9,7 @@
 
 namespace fs {
 
-[[maybe_unused]] [[nodiscard]] inline bool write_entire_file(Slice<u8> file_name, Slice<u8> data, bool truncate)
+[[maybe_unused]] [[nodiscard]] inline bool write_entire_file(Slice<u8> file_name, Slice<u8> data, bool truncate = true)
 {
     auto open_mode = std::ios::out;
     if (truncate)

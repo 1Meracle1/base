@@ -20,17 +20,23 @@
 
 template <typename T>
 concept SliceValueTypeConcept = requires(T t) {
-    { !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T> };
+    {
+        !std::is_same_v<T, void> && sizeof(T) != 0 && std::equality_comparable<T>
+    };
 };
 
 template <typename F, typename ValueType>
 concept SliceElementEqualityPredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    { f(lhs, rhs) } -> std::same_as<bool>;
+    {
+        f(lhs, rhs)
+    } -> std::same_as<bool>;
 };
 
 template <typename F, typename ValueType>
 concept SliceElementWeakOrderingComparePredicate = requires(F f, const ValueType& lhs, const ValueType& rhs) {
-    { f(lhs, rhs) } -> std::same_as<std::weak_ordering>;
+    {
+        f(lhs, rhs)
+    } -> std::same_as<std::weak_ordering>;
 };
 
 #define ByteSliceFromCstr(cstr) Slice<const char>{cstr}.chop_zero_termination().reinterpret_elements_as<u8>()
@@ -321,7 +327,7 @@ template <SliceValueTypeConcept ValueType> struct Slice
         return true;
     }
 
-    bool operator==(Slice<value_type> other) const { return equal(other); }
+    friend bool operator==(Slice<value_type> lhs, Slice<value_type> rhs) { return lhs.equal(rhs); }
 
     constexpr bool starts_with(const_reference v) const
     {
@@ -334,28 +340,28 @@ template <SliceValueTypeConcept ValueType> struct Slice
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_to(needle.len()));
+        return slice_to(needle.len()).equal(needle);
     }
 
     constexpr bool starts_with(Slice<value_type> needle, Predicate&& predicate) const
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_to(needle.len()), std::forward<Predicate>(predicate));
+        return slice_to(needle.len()).equal(needle, std::forward<Predicate>(predicate));
     }
 
     constexpr bool ends_with(Slice<value_type> needle) const
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_from_back(needle.len()));
+        return slice_from_back(needle.len()).equal(needle);
     }
 
     constexpr bool ends_with(Slice<value_type> needle, Predicate&& predicate) const
     {
         if (len() < needle.len())
             return false;
-        return equal(slice_from_back(needle.len()), std::forward<Predicate>(predicate));
+        return slice_from_back(needle.len()).equal(needle, std::forward<Predicate>(predicate));
     }
 
     void swap(size_type i, size_type j) { std::swap(m_ptr[i], m_ptr[j]); }
@@ -617,6 +623,12 @@ template <SliceValueTypeConcept ValueType> struct Slice
     constexpr Slice<value_type> trim(Slice<value_type> trimmed_elements) const
     {
         return trim_left(trimmed_elements).trim_right(trimmed_elements);
+    }
+
+    [[nodiscard]] constexpr Slice<value_type> trim_spaces() const
+    {
+        static auto space_chars = Slice<const char>(" \t\n\r").reinterpret_elements_as<u8>();
+        return trim_left(space_chars).trim_right(space_chars);
     }
 
     constexpr Slice chop_zero_termination() const
